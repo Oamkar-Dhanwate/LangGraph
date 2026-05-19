@@ -6,6 +6,7 @@ executes them against TiDB, and returns structured results.
 """
 
 import re
+import asyncio
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
@@ -102,6 +103,14 @@ class CRMSQLAgent:
         self._last_validation_error = None
 
     def run(self, state: GraphState) -> GraphState:
+        """Sync compatibility wrapper for non-LangGraph callers."""
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(self.arun(state))
+        raise RuntimeError("CRMSQLAgent.run() cannot be called from an active event loop; use arun()")
+
+    async def arun(self, state: GraphState) -> GraphState:
         """Execute CRM SQL query from user's question."""
         logger.info("[CRM SQL] Generating SQL for: {}", state["user_query"][:80])
 
@@ -113,7 +122,7 @@ class CRMSQLAgent:
             state["agent_trace"].append(self.name)
             return state
 
-        results = self._execute_sql(sql)
+        results = await self._execute_sql(sql)
         state["sql_results"] = results
 
         if isinstance(results, str):  # error string
@@ -245,36 +254,20 @@ Corrected SQL:"""
                 return f"Numeric column '{column}' cannot be compared to text value '{value}'"
         return None
 
-    def _execute_sql(self, sql: str) -> Any:
+    async def _execute_sql(self, sql: str) -> Any:
         """Execute SQL against TiDB. Returns list of dicts or error string."""
         try:
             import sqlalchemy as sa
             from backend.database.connection import engine
-            import asyncio
 
-            async def _run():
-                async with engine.begin() as conn:
-                    result = await conn.execute(sa.text(sql))
-                    rows = result.fetchall()
-                    cols = result.keys()
-                    return [
-                        {col: to_json_safe(value) for col, value in zip(cols, row)}
-                        for row in rows
-                    ]
-
-            # Run async in sync context
-            try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    # In async context, use concurrent.futures
-                    import concurrent.futures
-                    with concurrent.futures.ThreadPoolExecutor() as pool:
-                        future = pool.submit(asyncio.run, _run())
-                        return future.result(timeout=30)
-                else:
-                    return loop.run_until_complete(_run())
-            except Exception:
-                return asyncio.run(_run())
+            async with engine.begin() as conn:
+                result = await conn.execute(sa.text(sql))
+                rows = result.fetchall()
+                cols = result.keys()
+                return [
+                    {col: to_json_safe(value) for col, value in zip(cols, row)}
+                    for row in rows
+                ]
 
         except Exception as e:
             logger.error("[CRM SQL] Execution error: {}", e)

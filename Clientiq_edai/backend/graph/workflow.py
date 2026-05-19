@@ -56,8 +56,8 @@ def run_supervisor(state: GraphState) -> GraphState:
 def run_compliance(state: GraphState) -> GraphState:
     return compliance_agent.run(state)
 
-def run_crm_sql(state: GraphState) -> GraphState:
-    return crm_sql_agent.run(state)
+async def run_crm_sql(state: GraphState) -> GraphState:
+    return await crm_sql_agent.arun(state)
 
 def run_retrieval(state: GraphState) -> GraphState:
     return retrieval_agent.run(state)
