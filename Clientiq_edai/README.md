@@ -13,6 +13,20 @@ ClientIQ is a production-grade, agentic AI platform for enterprise sales and cus
 
 ---
 
+## Demo
+
+![ClientIQ Dashboard](demo/dashboard.png)
+
+| Login | AI Assistant | Clients |
+|-------|--------------|---------|
+| ![Login page](demo/login_page.png) | ![AI assistant page](demo/Ai_assistant_page.png) | ![Client page](demo/client_page.png) |
+
+| Knowledge Graph | Admin Panel |
+|-----------------|-------------|
+| ![Knowledge graph page](demo/knowledge_graph_page.png) | ![Admin panel](demo/admin_panel.png) |
+
+---
+
 ## Architecture Overview
 
 ```
