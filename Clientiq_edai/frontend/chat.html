@@ -1,0 +1,266 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ClientIQ — AI Assistant</title>
+  <link rel="stylesheet" href="static/style.css" />
+  <style>
+    .chat-shell { display:grid; grid-template-columns:1fr 340px; gap:0; height:calc(100vh - var(--topbar-h)); }
+    .chat-main  { display:flex; flex-direction:column; height:100%; overflow:hidden; }
+    .chat-msgs  { flex:1; overflow-y:auto; padding:24px; display:flex; flex-direction:column; gap:16px; }
+    .chat-input-row { padding:16px 24px; border-top:1px solid var(--border); background:var(--bg-secondary); }
+    .input-wrap { display:flex; gap:10px; align-items:flex-end; background:var(--bg-tertiary); border:1px solid var(--border-strong); border-radius:var(--radius-lg); padding:10px 14px; }
+    .input-wrap:focus-within { border-color:var(--accent-blue); }
+    #msg-input { flex:1; background:none; border:none; color:var(--text-primary); font-size:.9rem; resize:none; outline:none; min-height:24px; max-height:120px; font-family:var(--font-body); line-height:1.5; }
+    .send-btn { background:var(--accent-blue); border:none; color:white; width:36px;height:36px; border-radius:var(--radius-md); cursor:pointer; font-size:16px; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:var(--transition); }
+    .send-btn:hover { background:#1f6feb; }
+    .send-btn:disabled { opacity:.5; cursor:default; }
+    .msg { max-width:80%; }
+    .msg.user { margin-left:auto; }
+    .msg-bubble { padding:12px 16px; border-radius:var(--radius-lg); font-size:.875rem; line-height:1.6; }
+    .msg.user .msg-bubble { background:var(--accent-blue); color:white; border-bottom-right-radius:4px; }
+    .msg.ai   .msg-bubble { background:var(--bg-secondary); border:1px solid var(--border); border-bottom-left-radius:4px; }
+    .msg-meta { font-size:.73rem; color:var(--text-muted); margin-top:4px; padding:0 4px; }
+    .msg.user .msg-meta { text-align:right; }
+    .thinking { display:flex; gap:6px; align-items:center; padding:12px 16px; background:var(--bg-secondary); border:1px solid var(--border); border-radius:var(--radius-lg); width:fit-content; }
+    .thinking span { width:7px;height:7px;border-radius:50%;background:var(--accent-blue);animation:bounce 1s infinite; }
+    .thinking span:nth-child(2) { animation-delay:.15s; }
+    .thinking span:nth-child(3) { animation-delay:.3s; }
+    @keyframes bounce { 0%,100%{transform:translateY(0);opacity:.4} 50%{transform:translateY(-5px);opacity:1} }
+    .sidebar-panel { background:var(--bg-secondary); border-left:1px solid var(--border); overflow-y:auto; padding:16px; }
+    .panel-section { margin-bottom:20px; }
+    .panel-title { font-size:.78rem; font-weight:600; text-transform:uppercase; letter-spacing:.06em; color:var(--text-muted); margin-bottom:10px; }
+    .suggestion-chip { display:inline-block; background:var(--bg-tertiary); border:1px solid var(--border); border-radius:20px; padding:5px 12px; font-size:.78rem; color:var(--text-secondary); cursor:pointer; margin:3px; transition:var(--transition); }
+    .suggestion-chip:hover { border-color:var(--accent-blue); color:var(--accent-blue); background:var(--blue-bg); }
+    .agent-pill { display:inline-flex; align-items:center; gap:4px; background:var(--bg-elevated); border-radius:20px; padding:3px 10px; font-size:.72rem; color:var(--text-secondary); margin:2px; }
+    .agent-pill.active { background:var(--blue-bg); color:var(--accent-blue); }
+    pre { background:var(--bg-tertiary); border-radius:var(--radius-sm); padding:10px 12px; font-family:var(--font-mono); font-size:.8rem; overflow-x:auto; margin:8px 0; }
+  </style>
+</head>
+<body>
+<div class="app-shell" style="display:grid;grid-template-columns:var(--sidebar-w) 1fr;grid-template-rows:var(--topbar-h) 1fr">
+  <header class="topbar">
+    <div class="brand"><div class="brand-icon">IQ</div>Client<span>IQ</span></div>
+    <div style="font-size:.875rem;color:var(--text-secondary);margin-left:8px">/ AI Assistant</div>
+    <div class="topbar-spacer"></div>
+    <span class="badge badge-blue" id="session-badge">New Session</span>
+    <div class="topbar-avatar" data-user-initials="AU"></div>
+  </header>
+
+  <nav class="sidebar">
+    <a class="nav-item" href="dashboard.html">📊 Dashboard</a>
+    <a class="nav-item active" href="chat.html">🤖 AI Assistant</a>
+    <a class="nav-item" href="client.html">🏢 Clients</a>
+    <a class="nav-item" href="analytics.html">📈 Analytics</a>
+    <a class="nav-item" href="knowledge_graph.html">🕸 Knowledge Graph</a>
+    <a class="nav-item" href="admin.html">🛡 Admin Panel</a>
+  </nav>
+
+  <main style="display:grid;grid-template-columns:1fr 320px;overflow:hidden">
+    <!-- Chat area -->
+    <div class="chat-main">
+      <div class="chat-msgs" id="chat-msgs">
+        <!-- Welcome message -->
+        <div class="msg ai">
+          <div class="msg-bubble">
+            <strong>Welcome to ClientIQ AI Assistant</strong> 👋<br><br>
+            I'm powered by 11 specialized agents working together. I can help you with:
+            <ul style="margin:8px 0 0 16px;line-height:2">
+              <li>📊 CRM analytics and client queries</li>
+              <li>🔍 Semantic document search</li>
+              <li>⚠️ Churn risk and predictions</li>
+              <li>💡 Next-best-action recommendations</li>
+              <li>😊 Sentiment analysis</li>
+              <li>🕸 Knowledge graph exploration</li>
+            </ul>
+          </div>
+          <div class="msg-meta">ClientIQ AI · Just now</div>
+        </div>
+      </div>
+
+      <div class="chat-input-row">
+        <div class="input-wrap">
+          <textarea id="msg-input" rows="1" placeholder="Ask anything about your clients… (Enter to send, Shift+Enter for newline)"></textarea>
+          <button class="send-btn" id="send-btn" onclick="sendMessage()">➤</button>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+          <span class="suggestion-chip" onclick="prefill('Which clients have the highest churn risk this quarter?')">⚠️ Churn risks</span>
+          <span class="suggestion-chip" onclick="prefill('Summarize recent sentiment across all accounts')">😊 Sentiment summary</span>
+          <span class="suggestion-chip" onclick="prefill('What are the top recommendations for at-risk clients?')">💡 Recommendations</span>
+          <span class="suggestion-chip" onclick="prefill('Show me revenue trends for enterprise accounts')">📈 Revenue trends</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right panel -->
+    <div class="sidebar-panel">
+      <div class="panel-section">
+        <div class="panel-title">Active Agents</div>
+        <div id="agent-pills">
+          <span class="agent-pill">Supervisor</span>
+          <span class="agent-pill">Compliance</span>
+          <span class="agent-pill">CRM SQL</span>
+          <span class="agent-pill">Retrieval</span>
+          <span class="agent-pill">Citation</span>
+          <span class="agent-pill">Memory</span>
+          <span class="agent-pill">Sentiment</span>
+          <span class="agent-pill">Analytics</span>
+          <span class="agent-pill">Risk</span>
+          <span class="agent-pill">Recommendation</span>
+          <span class="agent-pill">KG</span>
+        </div>
+      </div>
+      <div class="panel-section" id="citations-panel" style="display:none">
+        <div class="panel-title">Sources & Citations</div>
+        <div id="citations-list"></div>
+      </div>
+      <div class="panel-section" id="risk-panel" style="display:none">
+        <div class="panel-title">Risk Scores</div>
+        <div id="risk-list"></div>
+      </div>
+      <div class="panel-section" id="recs-panel" style="display:none">
+        <div class="panel-title">Recommendations</div>
+        <div id="recs-list"></div>
+      </div>
+      <div class="panel-section">
+        <div class="panel-title">Session Context</div>
+        <div style="font-size:.75rem;color:var(--text-muted)">
+          <div>Intent: <span id="last-intent" style="color:var(--accent-blue)">—</span></div>
+          <div>Confidence: <span id="last-confidence">—</span></div>
+          <div>Agents used: <span id="last-agents-count">0</span></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="static/api.js"></script>
+<script src="static/auth.js"></script>
+<script src="static/components.js"></script>
+<script>
+  Auth.requireAuth();
+  Auth.populateUserUI();
+
+  let sessionId = null;
+  let isLoading = false;
+
+  // Pre-fill from URL params
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('company')) {
+    document.getElementById('msg-input').value = `Tell me about "${urlParams.get('company')}" — risk level, sentiment, and recommendations`;
+  }
+  if (urlParams.get('intent') === 'risk_analysis') {
+    document.getElementById('msg-input').value = 'Which clients have the highest churn risk? Give me a detailed analysis with recommendations.';
+  }
+
+  function prefill(text) {
+    document.getElementById('msg-input').value = text;
+    document.getElementById('msg-input').focus();
+  }
+
+  function appendMsg(role, content, meta = '') {
+    const msgs = document.getElementById('chat-msgs');
+    const div = document.createElement('div');
+    div.className = `msg ${role}`;
+    div.innerHTML = `
+      <div class="msg-bubble">${content}</div>
+      <div class="msg-meta">${meta || (role === 'user' ? 'You' : 'ClientIQ AI')} · ${new Date().toLocaleTimeString()}</div>`;
+    msgs.appendChild(div);
+    msgs.scrollTop = msgs.scrollHeight;
+    return div;
+  }
+
+  function showThinking() {
+    const msgs = document.getElementById('chat-msgs');
+    const div = document.createElement('div');
+    div.className = 'msg ai';
+    div.id = 'thinking-indicator';
+    div.innerHTML = `<div class="thinking"><span></span><span></span><span></span><span class="text-sm text-muted" style="margin-left:4px">Agents processing…</span></div>`;
+    msgs.appendChild(div);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  function updateAgentPills(agents) {
+    const pills = document.querySelectorAll('.agent-pill');
+    pills.forEach(p => p.classList.remove('active'));
+    (agents || []).forEach(a => {
+      pills.forEach(p => { if (p.textContent.toLowerCase().includes(a.replace('_agent','').replace('_',' '))) p.classList.add('active'); });
+    });
+  }
+
+  async function sendMessage() {
+    const input = document.getElementById('msg-input');
+    const query = input.value.trim();
+    if (!query || isLoading) return;
+
+    isLoading = true;
+    document.getElementById('send-btn').disabled = true;
+    input.value = '';
+    input.style.height = 'auto';
+
+    appendMsg('user', query.replace(/\n/g, '<br>'));
+    showThinking();
+
+    try {
+      const data = await QueryAPI.execute(query, sessionId);
+      sessionId = data.session_id;
+      document.getElementById('session-badge').textContent = `Session: ${sessionId?.slice(0,8)}`;
+
+      const thinkEl = document.getElementById('thinking-indicator');
+      if (thinkEl) thinkEl.remove();
+
+      // Format response (handle markdown-like)
+      let html = data.response
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/`(.*?)`/g, '<code style="background:var(--bg-elevated);padding:1px 4px;border-radius:3px;font-family:var(--font-mono);font-size:.85em">$1</code>')
+        .replace(/^• (.+)$/gm, '<li>$1</li>')
+        .replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>')
+        .replace(/\n\n/g, '<br><br>')
+        .replace(/\n/g, '<br>');
+
+      const agentsMeta = `Agents: ${(data.agents_used || []).length} · Confidence: ${(data.confidence * 100).toFixed(0)}%`;
+      appendMsg('ai', html, agentsMeta);
+
+      // Update sidebar panels
+      updateAgentPills(data.agents_used);
+      document.getElementById('last-intent').textContent = data.intent || '—';
+      document.getElementById('last-confidence').textContent = ((data.confidence || 0) * 100).toFixed(0) + '%';
+      document.getElementById('last-agents-count').textContent = (data.agents_used || []).length;
+
+      if (data.citations?.length) {
+        document.getElementById('citations-panel').style.display = 'block';
+        document.getElementById('citations-list').innerHTML = data.citations.slice(0,4).map((c,i) => citationCard(c,i)).join('');
+      }
+      if (data.risk_scores?.length) {
+        document.getElementById('risk-panel').style.display = 'block';
+        document.getElementById('risk-list').innerHTML = data.risk_scores.slice(0,4).map(r => `
+          <div style="padding:8px 0;border-bottom:1px solid var(--border)">
+            <div style="font-weight:500;font-size:.83rem">${r.company_name}</div>
+            <div style="margin-top:4px">${churnRiskDisplay(r.churn_probability)}</div>
+          </div>`).join('');
+      }
+      if (data.recommendations?.length) {
+        document.getElementById('recs-panel').style.display = 'block';
+        document.getElementById('recs-list').innerHTML = data.recommendations.map(r => recommendationCard(r)).join('');
+      }
+    } catch(e) {
+      document.getElementById('thinking-indicator')?.remove();
+      appendMsg('ai', `<span style="color:var(--accent-red)">⚠️ Error: ${e.message}</span>`);
+    } finally {
+      isLoading = false;
+      document.getElementById('send-btn').disabled = false;
+      input.focus();
+    }
+  }
+
+  // Textarea auto-resize + Enter key
+  const inp = document.getElementById('msg-input');
+  inp.addEventListener('input', () => { inp.style.height = 'auto'; inp.style.height = inp.scrollHeight + 'px'; });
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  });
+</script>
+</body>
+</html>

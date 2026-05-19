@@ -1,0 +1,210 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ClientIQ — Knowledge Graph</title>
+  <link rel="stylesheet" href="static/style.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
+  <style>
+    #cy { width:100%; height:calc(100vh - var(--topbar-h) - 56px); background:var(--bg-primary); }
+    .graph-toolbar { display:flex; align-items:center; gap:10px; padding:10px 20px; background:var(--bg-secondary); border-bottom:1px solid var(--border); flex-wrap:wrap; }
+    .node-info { position:absolute; right:24px; top:80px; width:280px; background:var(--bg-secondary); border:1px solid var(--border); border-radius:var(--radius-lg); padding:16px; display:none; z-index:10; box-shadow:var(--shadow-lg); }
+    .legend { display:flex; gap:12px; flex-wrap:wrap; }
+    .legend-item { display:flex; align-items:center; gap:5px; font-size:.75rem; color:var(--text-secondary); }
+    .legend-dot { width:10px;height:10px;border-radius:50%; }
+  </style>
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <div class="brand"><div class="brand-icon">IQ</div>Client<span>IQ</span></div>
+    <div style="font-size:.875rem;color:var(--text-secondary);margin-left:8px">/ Knowledge Graph</div>
+    <div class="topbar-spacer"></div>
+    <div class="topbar-avatar" data-user-initials="AU"></div>
+  </header>
+
+  <nav class="sidebar">
+    <a class="nav-item" href="dashboard.html">📊 Dashboard</a>
+    <a class="nav-item" href="chat.html">🤖 AI Assistant</a>
+    <a class="nav-item" href="client.html">🏢 Clients</a>
+    <a class="nav-item" href="analytics.html">📈 Analytics</a>
+    <a class="nav-item active" href="knowledge_graph.html">🕸 Knowledge Graph</a>
+    <a class="nav-item" href="admin.html">🛡 Admin Panel</a>
+  </nav>
+
+  <main style="position:relative;overflow:hidden">
+    <div class="graph-toolbar">
+      <button class="btn btn-secondary btn-sm" onclick="cy.fit()">⊞ Fit</button>
+      <button class="btn btn-secondary btn-sm" onclick="cy.zoom(cy.zoom()*1.2)">＋ Zoom</button>
+      <button class="btn btn-secondary btn-sm" onclick="cy.zoom(cy.zoom()*0.8)">－ Zoom</button>
+      <button class="btn btn-secondary btn-sm" onclick="resetLayout()">🔄 Re-layout</button>
+      <select id="layout-select" class="form-input" style="width:auto;padding:5px 10px;font-size:.8rem" onchange="resetLayout()">
+        <option value="cose">Force-directed (CoSE)</option>
+        <option value="circle">Circle</option>
+        <option value="breadthfirst">Breadth First</option>
+        <option value="grid">Grid</option>
+      </select>
+      <div style="margin-left:auto" class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#3B8BD4"></div>Company</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#1D9E75"></div>Contact</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#EF9F27"></div>Product</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#7F77DD"></div>Topic</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#E24B4A"></div>Risk</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#D85A30"></div>Event</div>
+      </div>
+      <span id="graph-stats" class="text-xs text-muted"></span>
+    </div>
+    <div id="cy"></div>
+
+    <!-- Node info panel -->
+    <div class="node-info" id="node-info">
+      <div class="flex items-center justify-between mb-4">
+        <span class="card-title" id="ni-label">Node</span>
+        <button onclick="document.getElementById('node-info').style.display='none'" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:18px">×</button>
+      </div>
+      <div class="detail-field" style="margin-bottom:10px"><div class="detail-label">Type</div><div id="ni-type"></div></div>
+      <div class="detail-field"><div class="detail-label">Connections</div><div id="ni-degree"></div></div>
+      <div style="margin-top:12px" id="ni-props"></div>
+      <a id="ni-link" href="#" class="btn btn-primary btn-sm w-full" style="justify-content:center;margin-top:12px;display:none">View Details</a>
+    </div>
+  </main>
+</div>
+
+<script src="static/api.js"></script>
+<script src="static/auth.js"></script>
+<script src="static/components.js"></script>
+<script>
+  Auth.requireAuth();
+  Auth.populateUserUI();
+
+  let cy = null;
+
+  async function loadGraph() {
+    try {
+      const data = await GraphAPI.data();
+      const nodes = data.nodes || [];
+      const edges = data.edges || [];
+
+      document.getElementById('graph-stats').textContent = `${nodes.length} nodes · ${edges.length} edges`;
+
+      const elements = [
+        ...nodes.map(n => ({
+          data: {
+            id: n.data.id,
+            label: n.data.label,
+            type: n.data.type,
+            color: n.data.color,
+            size: n.data.size || 25,
+            properties: n.data.properties || {},
+          }
+        })),
+        ...edges.map(e => ({
+          data: {
+            id: e.data.id,
+            source: e.data.source,
+            target: e.data.target,
+            label: e.data.label,
+          }
+        }))
+      ];
+
+      cy = cytoscape({
+        container: document.getElementById('cy'),
+        elements,
+        style: [
+          {
+            selector: 'node',
+            style: {
+              'background-color': 'data(color)',
+              'label': 'data(label)',
+              'color': '#e6edf3',
+              'font-size': '10px',
+              'font-family': 'DM Sans, sans-serif',
+              'text-valign': 'bottom',
+              'text-halign': 'center',
+              'text-margin-y': '4px',
+              'width': 'data(size)',
+              'height': 'data(size)',
+              'border-width': '2px',
+              'border-color': 'rgba(255,255,255,0.1)',
+              'text-outline-color': '#0d1117',
+              'text-outline-width': '2px',
+            }
+          },
+          {
+            selector: 'node:selected',
+            style: {
+              'border-color': '#388bfd',
+              'border-width': '3px',
+              'box-shadow': '0 0 12px rgba(56,139,253,0.5)',
+            }
+          },
+          {
+            selector: 'edge',
+            style: {
+              'width': 1.5,
+              'line-color': 'rgba(240,246,252,0.15)',
+              'target-arrow-color': 'rgba(240,246,252,0.3)',
+              'target-arrow-shape': 'triangle',
+              'curve-style': 'bezier',
+              'label': 'data(label)',
+              'font-size': '8px',
+              'color': '#484f58',
+              'text-outline-color': '#0d1117',
+              'text-outline-width': '2px',
+            }
+          },
+          {
+            selector: 'edge:selected',
+            style: { 'line-color': '#388bfd', 'target-arrow-color': '#388bfd' }
+          }
+        ],
+        layout: { name: 'cose', animate: true, randomize: true, nodeRepulsion: 8000, idealEdgeLength: 100, padding: 40 },
+        wheelSensitivity: 0.3,
+      });
+
+      // Node click → info panel
+      cy.on('tap', 'node', function(evt) {
+        const n = evt.target;
+        const panel = document.getElementById('node-info');
+        panel.style.display = 'block';
+        document.getElementById('ni-label').textContent = n.data('label');
+        document.getElementById('ni-type').innerHTML = `<span class="badge badge-blue">${n.data('type')}</span>`;
+        document.getElementById('ni-degree').textContent = n.degree(false) + ' connections';
+
+        const props = n.data('properties');
+        const propsHtml = Object.entries(props || {}).map(([k,v]) => `
+          <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);font-size:.8rem">
+            <span class="text-muted">${k}</span><span>${v}</span>
+          </div>`).join('');
+        document.getElementById('ni-props').innerHTML = propsHtml;
+
+        if (n.data('type') === 'company') {
+          document.getElementById('ni-link').style.display = 'flex';
+          document.getElementById('ni-link').href = `client.html?search=${encodeURIComponent(n.data('label'))}`;
+        } else {
+          document.getElementById('ni-link').style.display = 'none';
+        }
+      });
+
+      cy.on('tap', function(evt) {
+        if (evt.target === cy) document.getElementById('node-info').style.display = 'none';
+      });
+
+    } catch(e) {
+      document.getElementById('cy').innerHTML = emptyState('🕸', 'Knowledge graph unavailable', 'Run seed_all.py and ensure data is populated');
+      console.error(e);
+    }
+  }
+
+  function resetLayout() {
+    if (!cy) return;
+    const name = document.getElementById('layout-select').value;
+    cy.layout({ name, animate: true, padding: 40, nodeRepulsion: 8000 }).run();
+  }
+
+  loadGraph();
+</script>
+</body>
+</html>

@@ -1,0 +1,145 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ClientIQ — Enterprise Login</title>
+  <link rel="stylesheet" href="static/style.css" />
+  <style>
+    body { display:flex; align-items:center; justify-content:center; min-height:100vh; background: var(--bg-primary); }
+    .login-wrap { width:100%; max-width:420px; padding:24px; }
+    .login-card { background:var(--bg-secondary); border:1px solid var(--border); border-radius:var(--radius-xl); padding:40px 36px; }
+    .login-hero { text-align:center; margin-bottom:32px; }
+    .login-hero .brand-icon { width:56px;height:56px;font-size:22px;margin:0 auto 16px; }
+    .login-hero h1 { font-family:var(--font-heading);font-size:1.6rem;font-weight:700;margin-bottom:6px; }
+    .login-hero p  { color:var(--text-secondary);font-size:.875rem; }
+    .demo-btns { display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px; }
+    .demo-btn { flex:1 1 calc(50% - 4px);background:var(--bg-tertiary);border:1px solid var(--border);border-radius:var(--radius-md);padding:8px;font-size:.78rem;color:var(--text-secondary);cursor:pointer;text-align:center;transition:var(--transition); }
+    .demo-btn:hover { border-color:var(--accent-blue);color:var(--accent-blue); }
+    .login-footer { text-align:center;margin-top:20px;font-size:.78rem;color:var(--text-muted); }
+    .bg-dots { position:fixed;inset:0;pointer-events:none;opacity:.04;background-image:radial-gradient(var(--accent-blue) 1px,transparent 1px);background-size:28px 28px; }
+    #login-error { display:none; }
+    .system-status { display:flex;align-items:center;gap:6px;font-size:.75rem;color:var(--text-muted);margin-top:12px;justify-content:center; }
+    .status-dot { width:6px;height:6px;border-radius:50%;background:var(--accent-green); }
+  </style>
+</head>
+<body>
+<div class="bg-dots"></div>
+<div class="login-wrap">
+  <div class="login-card">
+    <div class="login-hero">
+      <div class="brand-icon" style="display:flex;align-items:center;justify-content:center">IQ</div>
+      <h1>Client<span style="color:var(--accent-blue)">IQ</span></h1>
+      <p>Enterprise AI Intelligence Platform</p>
+    </div>
+
+    <!-- Demo Quick Login -->
+    <p class="text-xs text-muted" style="margin-bottom:8px;font-weight:500;letter-spacing:.05em;text-transform:uppercase">Quick Demo Login</p>
+    <div class="demo-btns">
+      <button class="demo-btn" onclick="fillDemo('admin@clientiq.demo','admin123','Admin')">👑 Admin</button>
+      <button class="demo-btn" onclick="fillDemo('manager@clientiq.demo','manager123','Manager')">📊 Manager</button>
+      <button class="demo-btn" onclick="fillDemo('analyst@clientiq.demo','analyst123','Analyst')">🔍 Analyst</button>
+      <button class="demo-btn" onclick="fillDemo('viewer@clientiq.demo','viewer123','Viewer')">👁 Viewer</button>
+    </div>
+
+    <div class="alert alert-danger" id="login-error">
+      <span>✕</span><span id="error-msg">Invalid email or password.</span>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Email Address</label>
+      <input id="email" type="email" class="form-input" placeholder="you@company.com" autocomplete="email" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Password</label>
+      <input id="password" type="password" class="form-input" placeholder="••••••••" autocomplete="current-password" />
+    </div>
+
+    <button class="btn btn-primary w-full" id="login-btn" onclick="handleLogin()" style="margin-top:8px;justify-content:center;font-size:1rem;padding:12px">
+      <span id="btn-text">Sign In</span>
+      <span id="btn-spinner" class="spinner hidden" style="width:16px;height:16px;border-width:2px"></span>
+    </button>
+
+    <div class="system-status">
+      <div class="status-dot" id="status-dot"></div>
+      <span id="status-text">Checking system status…</span>
+    </div>
+  </div>
+  <div class="login-footer">
+    ClientIQ v1.0 — Enterprise Multi-Agent RAG Platform<br>
+    <span style="opacity:.5">Powered by LangGraph · Mistral AI · Pinecone · TiDB</span>
+  </div>
+</div>
+
+<script src="static/api.js"></script>
+<script src="static/auth.js"></script>
+<script>
+  // Auto-redirect if already logged in
+  if (Auth.getToken()) window.location.href = 'dashboard.html';
+
+  function fillDemo(email, pass, role) {
+    document.getElementById('email').value = email;
+    document.getElementById('password').value = pass;
+    document.getElementById('login-btn').focus();
+  }
+
+  async function handleLogin() {
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+    const errDiv = document.getElementById('login-error');
+    const btn = document.getElementById('login-btn');
+    const spinner = document.getElementById('btn-spinner');
+    const btnText = document.getElementById('btn-text');
+
+    if (!email || !password) {
+      document.getElementById('error-msg').textContent = 'Please enter email and password.';
+      errDiv.style.display = 'flex';
+      return;
+    }
+
+    errDiv.style.display = 'none';
+    btn.disabled = true;
+    spinner.classList.remove('hidden');
+    btnText.textContent = 'Signing in…';
+
+    try {
+      const ok = await Auth.login(email, password);
+      if (ok) {
+        Toast.success('Welcome back!');
+        setTimeout(() => window.location.href = 'dashboard.html', 400);
+      } else {
+        throw new Error('Login failed');
+      }
+    } catch {
+      document.getElementById('error-msg').textContent = 'Invalid email or password.';
+      errDiv.style.display = 'flex';
+      btn.disabled = false;
+      spinner.classList.add('hidden');
+      btnText.textContent = 'Sign In';
+    }
+  }
+
+  // Enter key support
+  document.addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); });
+
+  // System health check
+  (async () => {
+    try {
+      const h = await SystemAPI.health();
+      const dot = document.getElementById('status-dot');
+      const txt = document.getElementById('status-text');
+      if (h?.status === 'healthy') {
+        dot.style.background = 'var(--accent-green)';
+        txt.textContent = 'All systems operational';
+      } else {
+        dot.style.background = 'var(--accent-amber)';
+        txt.textContent = 'Degraded mode — some features limited';
+      }
+    } catch {
+      document.getElementById('status-dot').style.background = 'var(--accent-red)';
+      document.getElementById('status-text').textContent = 'Backend unreachable';
+    }
+  })();
+</script>
+</body>
+</html>

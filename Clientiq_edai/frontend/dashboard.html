@@ -1,0 +1,219 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ClientIQ — Dashboard</title>
+  <link rel="stylesheet" href="static/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="brand"><div class="brand-icon">IQ</div>Client<span>IQ</span></div>
+    <div class="topbar-search">
+      <span>🔍</span>
+      <input type="text" placeholder="Search clients, tickets, contracts…" id="global-search" />
+    </div>
+    <div class="topbar-spacer"></div>
+    <button class="topbar-btn" title="Notifications">🔔</button>
+    <div class="topbar-avatar" data-user-initials="AU" onclick="Auth.logout()" title="Logout"></div>
+    <span class="text-sm text-muted" data-user-name style="margin-left:4px"></span>
+  </header>
+
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <div class="nav-section-label">Navigation</div>
+    <a class="nav-item active" href="dashboard.html">📊 Dashboard</a>
+    <a class="nav-item" href="chat.html">🤖 AI Assistant</a>
+    <a class="nav-item" href="client.html">🏢 Clients</a>
+    <a class="nav-item" href="analytics.html">📈 Analytics</a>
+    <a class="nav-item" href="knowledge_graph.html">🕸 Knowledge Graph</a>
+    <div class="nav-section-label">Admin</div>
+    <a class="nav-item" href="admin.html" data-requires="read_audit_logs">🛡 Admin Panel</a>
+    <div style="position:absolute;bottom:16px;left:0;right:0;padding:0 16px">
+      <div style="background:var(--blue-bg);border:1px solid var(--accent-blue);border-radius:var(--radius-md);padding:12px;font-size:.78rem">
+        <div style="font-weight:600;color:var(--accent-blue);margin-bottom:4px">Role: <span data-user-role></span></div>
+        <div class="text-muted">Logged in as <span data-user-name></span></div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main -->
+  <main class="main-content">
+    <div class="page-title">Dashboard</div>
+    <div class="page-subtitle">Enterprise client intelligence overview</div>
+
+    <!-- KPI Metrics -->
+    <div class="metric-grid">
+      <div class="metric-card blue" id="mc-clients">
+        <div class="metric-label">Total Clients</div>
+        <div class="metric-value" data-value>—</div>
+        <div class="metric-delta up" data-delta>↑ Loading…</div>
+      </div>
+      <div class="metric-card red" id="mc-risk">
+        <div class="metric-label">At-Risk Clients</div>
+        <div class="metric-value" data-value>—</div>
+        <div class="metric-delta down" data-delta>Churn &gt; 60%</div>
+      </div>
+      <div class="metric-card teal" id="mc-revenue">
+        <div class="metric-label">Contract Value (Active)</div>
+        <div class="metric-value" data-value>—</div>
+        <div class="metric-delta up" data-delta>↑ Active ARR</div>
+      </div>
+      <div class="metric-card amber" id="mc-tickets">
+        <div class="metric-label">Critical Tickets Open</div>
+        <div class="metric-value" data-value>—</div>
+        <div class="metric-delta down" data-delta>Needs attention</div>
+      </div>
+      <div class="metric-card green" id="mc-health">
+        <div class="metric-label">Avg Health Score</div>
+        <div class="metric-value" data-value>—</div>
+        <div class="metric-delta up" data-delta>Portfolio avg</div>
+      </div>
+    </div>
+
+    <!-- Row 2: Charts -->
+    <div style="display:grid;grid-template-columns:2fr 1fr;gap:20px;margin-bottom:20px">
+      <div class="card">
+        <div class="card-header">
+          <div><div class="card-title">Revenue Trend</div><div class="card-subtitle">Monthly contract value (last 6 months)</div></div>
+          <select id="rev-months" class="form-input" style="width:auto;padding:4px 8px;font-size:.8rem">
+            <option value="6">6 months</option>
+            <option value="12">12 months</option>
+          </select>
+        </div>
+        <div style="height:220px"><canvas id="revenueChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title">Health Distribution</div></div>
+        <div style="height:220px"><canvas id="healthDonut"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Row 3: Churn risk + Quick Actions -->
+    <div style="display:grid;grid-template-columns:2fr 1fr;gap:20px">
+      <div class="card">
+        <div class="card-header">
+          <div><div class="card-title">Top Churn Risk Clients</div><div class="card-subtitle">Sorted by churn probability</div></div>
+          <a href="analytics.html" class="btn btn-secondary btn-sm">View All</a>
+        </div>
+        <div style="height:260px"><canvas id="churnChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title">Quick Actions</div></div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <a href="chat.html" class="btn btn-primary" style="justify-content:center">🤖 Ask AI Assistant</a>
+          <a href="client.html" class="btn btn-secondary" style="justify-content:center">🏢 Browse Clients</a>
+          <a href="knowledge_graph.html" class="btn btn-secondary" style="justify-content:center">🕸 View KG</a>
+          <a href="analytics.html" class="btn btn-secondary" style="justify-content:center">📈 Deep Analytics</a>
+          <a href="admin.html" class="btn btn-secondary" style="justify-content:center" data-requires="read_audit_logs">🛡 Audit Logs</a>
+        </div>
+        <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+          <div class="card-title" style="margin-bottom:10px;font-size:.85rem">System Status</div>
+          <div id="sys-status" class="text-sm text-muted">Checking…</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- At-risk table -->
+    <div class="card" style="margin-top:20px">
+      <div class="card-header">
+        <div><div class="card-title">High-Risk Client Watch List</div><div class="card-subtitle">Clients requiring immediate attention</div></div>
+        <a href="chat.html?intent=risk_analysis" class="btn btn-secondary btn-sm">🤖 AI Risk Report</a>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="data-table" id="risk-table">
+          <thead>
+            <tr>
+              <th>Company</th>
+              <th>Industry</th>
+              <th>Tier</th>
+              <th>Health Score</th>
+              <th>Churn Risk</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="risk-tbody">
+            <tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text-muted)"><div class="spinner"></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="static/api.js"></script>
+<script src="static/auth.js"></script>
+<script src="static/components.js"></script>
+<script src="static/charts.js"></script>
+<script>
+  Auth.requireAuth();
+  Auth.populateUserUI();
+
+  async function loadDashboard() {
+    // Overview KPIs
+    try {
+      const ov = await AnalyticsAPI.overview();
+      document.querySelector('#mc-clients [data-value]').textContent   = ov.total_clients;
+      document.querySelector('#mc-risk [data-value]').textContent      = ov.at_risk_clients;
+      document.querySelector('#mc-revenue [data-value]').textContent   = formatCurrency(ov.active_contract_value);
+      document.querySelector('#mc-tickets [data-value]').textContent   = ov.critical_open_tickets;
+      document.querySelector('#mc-health [data-value]').textContent    = ov.avg_health_score;
+    } catch(e) { console.warn('Overview failed', e); }
+
+    // Revenue chart
+    try {
+      const months = parseInt(document.getElementById('rev-months').value);
+      const rv = await AnalyticsAPI.revenueTrend(months);
+      buildRevenueChart('revenueChart', rv.map(r => r.month), rv.map(r => r.revenue));
+    } catch(e) {}
+
+    // Health donut
+    try {
+      const hd = await AnalyticsAPI.healthDistribution();
+      buildHealthDonut('healthDonut', hd);
+    } catch(e) {}
+
+    // Churn chart + table
+    try {
+      const cr = await AnalyticsAPI.churnRisk(0.3);
+      buildChurnChart('churnChart', cr);
+
+      const tbody = document.getElementById('risk-tbody');
+      if (!cr.length) {
+        tbody.innerHTML = '<tr><td colspan="6">' + emptyState('✅', 'No high-risk clients', 'All clients are in good standing') + '</td></tr>';
+      } else {
+        tbody.innerHTML = cr.slice(0, 8).map(c => `
+          <tr>
+            <td><a href="client.html?id=${c.id}" style="font-weight:500">${c.name}</a></td>
+            <td class="text-muted">${c.industry || '—'}</td>
+            <td>${tierBadge(c.account_tier)}</td>
+            <td>${healthBar(c.health_score)}</td>
+            <td>${churnRiskDisplay(c.churn_risk)}</td>
+            <td><a href="chat.html?company=${encodeURIComponent(c.name)}" class="btn btn-secondary btn-sm">🤖 Analyze</a></td>
+          </tr>`).join('');
+      }
+    } catch(e) {}
+
+    // System status
+    try {
+      const hs = await SystemAPI.health();
+      document.getElementById('sys-status').innerHTML = `
+        <span style="color:${hs.status==='healthy'?'var(--accent-green)':'var(--accent-amber)'}">●</span>
+        ${hs.status} — DB: ${hs.database} · LLM: ${hs.llm}`;
+    } catch {}
+  }
+
+  document.getElementById('rev-months').addEventListener('change', async () => {
+    const months = parseInt(document.getElementById('rev-months').value);
+    const rv = await AnalyticsAPI.revenueTrend(months);
+    buildRevenueChart('revenueChart', rv.map(r => r.month), rv.map(r => r.revenue));
+  });
+
+  loadDashboard();
+</script>
+</body>
+</html>

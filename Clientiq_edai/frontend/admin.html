@@ -1,0 +1,604 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ClientIQ — Admin Panel</title>
+  <link rel="stylesheet" href="static/style.css" />
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <div class="brand"><div class="brand-icon">IQ</div>Client<span>IQ</span></div>
+    <div style="font-size:.875rem;color:var(--text-secondary);margin-left:8px">/ Admin Panel</div>
+    <div class="topbar-spacer"></div>
+    <span class="badge badge-red">Admin Only</span>
+    <div class="topbar-avatar" data-user-initials="AU"></div>
+  </header>
+
+  <nav class="sidebar">
+    <a class="nav-item" href="dashboard.html">📊 Dashboard</a>
+    <a class="nav-item" href="chat.html">🤖 AI Assistant</a>
+    <a class="nav-item" href="client.html">🏢 Clients</a>
+    <a class="nav-item" href="analytics.html">📈 Analytics</a>
+    <a class="nav-item" href="knowledge_graph.html">🕸 Knowledge Graph</a>
+    <a class="nav-item active" href="admin.html">🛡 Admin Panel</a>
+  </nav>
+
+  <main class="main-content">
+    <div class="page-title">Admin Panel</div>
+    <div class="page-subtitle">System governance, audit logs, user management, compliance monitoring</div>
+
+    <!-- System Stats -->
+    <div class="metric-grid" style="margin-bottom:24px" id="sys-stats">
+      <div class="metric-card blue"><div class="metric-label">Total Companies</div><div class="metric-value" id="stat-companies">—</div></div>
+      <div class="metric-card teal"><div class="metric-label">Total Tickets</div><div class="metric-value" id="stat-tickets">—</div></div>
+      <div class="metric-card amber"><div class="metric-label">Total Emails</div><div class="metric-value" id="stat-emails">—</div></div>
+      <div class="metric-card purple"><div class="metric-label">AI Sessions</div><div class="metric-value" id="stat-sessions">—</div></div>
+      <div class="metric-card gray" style="background:var(--bg-secondary)"><div class="metric-label">Audit Events</div><div class="metric-value" id="stat-audit">—</div></div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tab-bar" style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:20px">
+      <div class="tab active" onclick="switchTab('audit',this)">📋 Audit Logs</div>
+      <div class="tab" onclick="switchTab('users',this)">👥 Users</div>
+      <div class="tab" onclick="switchTab('data',this)">📝 Add CRM Data</div>
+      <div class="tab" onclick="switchTab('roles',this)">🔐 Roles & Permissions</div>
+      <div class="tab" onclick="switchTab('compliance',this)">✅ Compliance</div>
+    </div>
+
+    <!-- Audit Logs Tab -->
+    <div id="tab-audit">
+      <div class="flex items-center gap-3 mb-4">
+        <input type="text" class="form-input" placeholder="Filter by action…" id="audit-filter" style="max-width:240px" oninput="filterAuditLogs(this.value)" />
+        <button class="btn btn-secondary btn-sm" onclick="loadAuditLogs()">🔄 Refresh</button>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <div style="overflow-x:auto">
+          <table class="data-table" id="audit-table">
+            <thead><tr><th>Timestamp</th><th>User</th><th>Action</th><th>Resource</th><th>IP Address</th><th>Status</th></tr></thead>
+            <tbody id="audit-tbody">
+              <tr><td colspan="6" style="text-align:center;padding:32px"><div class="spinner"></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Users Tab -->
+    <div id="tab-users" style="display:none">
+      <div class="flex items-center justify-between mb-4">
+        <span class="text-sm text-muted">All system users</span>
+        <button class="btn btn-primary btn-sm" onclick="Toast.info('User creation via API — see docs')">+ Add User</button>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <table class="data-table" id="users-table">
+          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Last Login</th><th>Created</th><th>Action</th></tr></thead>
+          <tbody id="users-tbody">
+            <tr><td colspan="7" style="text-align:center;padding:32px"><div class="spinner"></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Add CRM Data Tab -->
+    <div id="tab-data" style="display:none">
+      <div class="admin-data-layout">
+        <div class="card">
+          <div class="card-title" style="margin-bottom:12px">Record Type</div>
+          <div style="display:flex;flex-direction:column;gap:8px" id="record-type-list"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title" id="data-form-title">Add CRM Data</div>
+              <div class="card-subtitle" id="data-form-subtitle">Choose a record type and client account.</div>
+            </div>
+            <span class="badge badge-blue" id="data-target-table">emails</span>
+          </div>
+
+          <form id="admin-data-form" onsubmit="submitAdminRecord(event)">
+            <div class="admin-data-fields">
+              <div class="form-group">
+                <label class="form-label" for="data-company">Company</label>
+                <select class="form-input" id="data-company" name="company_id" onchange="loadDataContacts()" required>
+                  <option value="">Loading companies...</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="data-contact">Contact</label>
+                <select class="form-input" id="data-contact" name="contact_id">
+                  <option value="">Optional</option>
+                </select>
+              </div>
+            </div>
+
+            <div id="dynamic-data-fields"></div>
+
+            <div class="flex items-center justify-between mt-4">
+              <span class="text-sm text-muted" id="data-helper-text">Creates a row in the selected CRM table.</span>
+              <button class="btn btn-primary" id="data-submit-btn" type="submit">Add Record</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Roles Tab -->
+    <div id="tab-roles" style="display:none">
+      <div id="roles-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px"></div>
+    </div>
+
+    <!-- Compliance Tab -->
+    <div id="tab-compliance" style="display:none">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+        <div class="card">
+          <div class="card-title" style="margin-bottom:12px">RBAC Policy Summary</div>
+          <table class="data-table">
+            <thead><tr><th>Role</th><th>Read CRM</th><th>Financials</th><th>Contracts</th><th>PII</th><th>Audit</th></tr></thead>
+            <tbody>
+              <tr><td><span class="badge badge-red">Admin</span></td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+              <tr><td><span class="badge badge-amber">Manager</span></td><td>✅</td><td>✅</td><td>✅</td><td>❌</td><td>❌</td></tr>
+              <tr><td><span class="badge badge-blue">Analyst</span></td><td>✅</td><td>✅</td><td>❌</td><td>❌</td><td>❌</td></tr>
+              <tr><td><span class="badge badge-gray">Viewer</span></td><td>✅</td><td>❌</td><td>❌</td><td>❌</td><td>❌</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card">
+          <div class="card-title" style="margin-bottom:12px">Compliance Checklist</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div class="alert alert-success"><span>✅</span><span>JWT authentication enforced on all endpoints</span></div>
+            <div class="alert alert-success"><span>✅</span><span>RBAC compliance agent active in every query</span></div>
+            <div class="alert alert-success"><span>✅</span><span>All user actions logged to audit trail</span></div>
+            <div class="alert alert-success"><span>✅</span><span>PII fields redacted for non-admin roles</span></div>
+            <div class="alert alert-success"><span>✅</span><span>SQL injection protection via parameterized queries</span></div>
+            <div class="alert alert-warning"><span>⚠️</span><span>HTTPS/TLS — configure in production deployment</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="static/api.js"></script>
+<script src="static/auth.js"></script>
+<script src="static/components.js"></script>
+<script>
+  Auth.requireAuth();
+  Auth.populateUserUI();
+
+  let allAuditLogs = [];
+  let allCompanies = [];
+  let selectedRecordType = 'email';
+  let sentimentEdited = false;
+  let sentimentPredictTimer = null;
+
+  const recordTypeConfig = {
+    email: {
+      label: 'Email',
+      table: 'emails',
+      subtitle: 'Store inbound or outbound customer email content.',
+      helper: 'Creates an email row and adds a sentiment timeline entry.',
+      fields: [
+        { name:'direction', label:'Direction', type:'select', options:['outbound','inbound'], value:'outbound' },
+        { name:'sent_at', label:'Sent At', type:'datetime-local' },
+        { name:'subject', label:'Subject', type:'text', required:true },
+        { name:'thread_id', label:'Thread ID', type:'text' },
+        { name:'body', label:'Email Body', type:'textarea', required:true, wide:true },
+        { name:'sentiment_label', label:'Sentiment', type:'select', options:['neutral','positive','negative'], value:'neutral' },
+        { name:'sentiment_score', label:'Sentiment Score', type:'number', value:'0', step:'0.0001' },
+      ],
+    },
+    meeting: {
+      label: 'Meeting Notes',
+      table: 'meetings',
+      subtitle: 'Capture meeting notes, attendees, action items, and timing.',
+      helper: 'Creates a meeting row and adds a sentiment timeline entry.',
+      fields: [
+        { name:'title', label:'Title', type:'text', required:true },
+        { name:'meeting_type', label:'Meeting Type', type:'select', options:['other','discovery','demo','qbr','renewal','support','kickoff'], value:'other' },
+        { name:'scheduled_at', label:'Scheduled At', type:'datetime-local', required:true },
+        { name:'duration_mins', label:'Duration Minutes', type:'number', value:'60' },
+        { name:'attendees', label:'Attendees', type:'text', placeholder:'Comma separated names', wide:true },
+        { name:'notes', label:'Meeting Notes', type:'textarea', required:true, wide:true },
+        { name:'action_items', label:'Action Items', type:'textarea', placeholder:'One action item per line', wide:true },
+        { name:'sentiment_label', label:'Sentiment', type:'select', options:['neutral','positive','negative'], value:'neutral' },
+        { name:'sentiment_score', label:'Sentiment Score', type:'number', value:'0', step:'0.0001' },
+      ],
+    },
+    call: {
+      label: 'Call Note',
+      table: 'call_transcripts',
+      subtitle: 'Add call transcript notes, summary, topics, and duration.',
+      helper: 'Creates a call transcript row and adds a sentiment timeline entry.',
+      fields: [
+        { name:'call_type', label:'Call Type', type:'select', options:['other','sales','support','renewal','escalation'], value:'other' },
+        { name:'called_at', label:'Called At', type:'datetime-local', required:true },
+        { name:'duration_secs', label:'Duration Seconds', type:'number', value:'0' },
+        { name:'key_topics', label:'Key Topics', type:'text', placeholder:'Comma separated topics' },
+        { name:'summary', label:'Summary', type:'textarea', wide:true },
+        { name:'transcript', label:'Transcript / Note', type:'textarea', required:true, wide:true },
+        { name:'sentiment_label', label:'Sentiment', type:'select', options:['neutral','positive','negative'], value:'neutral' },
+        { name:'sentiment_score', label:'Sentiment Score', type:'number', value:'0', step:'0.0001' },
+      ],
+    },
+    ticket: {
+      label: 'Support Ticket',
+      table: 'support_tickets',
+      subtitle: 'Create support issues directly in the ticket table.',
+      helper: 'Creates a ticket row. Leave ticket number blank to auto-generate one.',
+      fields: [
+        { name:'ticket_number', label:'Ticket Number', type:'text', placeholder:'Auto-generated if blank' },
+        { name:'opened_at', label:'Opened At', type:'datetime-local' },
+        { name:'title', label:'Title', type:'text', required:true },
+        { name:'category', label:'Category', type:'text' },
+        { name:'priority', label:'Priority', type:'select', options:['medium','low','high','critical'], value:'medium' },
+        { name:'ticket_status', label:'Status', type:'select', options:['open','in_progress','pending_customer','resolved','closed'], value:'open' },
+        { name:'description', label:'Description', type:'textarea', required:true, wide:true },
+        { name:'resolution', label:'Resolution', type:'textarea', wide:true },
+        { name:'sentiment_label', label:'Sentiment', type:'select', options:['neutral','positive','negative'], value:'neutral' },
+        { name:'sentiment_score', label:'Sentiment Score', type:'number', value:'0', step:'0.0001' },
+      ],
+    },
+    opportunity_note: {
+      label: 'Opportunity Note',
+      table: 'opportunities',
+      subtitle: 'Add sales notes and opportunity context.',
+      helper: 'Creates an opportunity row with the note stored in opportunities.notes.',
+      fields: [
+        { name:'name', label:'Opportunity / Note Title', type:'text', required:true },
+        { name:'stage', label:'Stage', type:'select', options:['prospecting','qualification','proposal','negotiation','closed_won','closed_lost'], value:'prospecting' },
+        { name:'amount', label:'Amount', type:'number', value:'0', step:'0.01' },
+        { name:'probability', label:'Probability', type:'number', value:'0', step:'0.01' },
+        { name:'close_date', label:'Close Date', type:'date' },
+        { name:'source', label:'Source', type:'text', value:'admin' },
+        { name:'notes', label:'Notes', type:'textarea', required:true, wide:true },
+      ],
+    },
+    contract: {
+      label: 'Contract',
+      table: 'contracts',
+      subtitle: 'Add contract metadata and terms.',
+      helper: 'Creates a contract row for the selected client.',
+      fields: [
+        { name:'title', label:'Title', type:'text', required:true },
+        { name:'contract_type', label:'Contract Type', type:'select', options:['saas','professional_services','support','partnership','nda'], value:'saas' },
+        { name:'value', label:'Value', type:'number', value:'0', step:'0.01' },
+        { name:'currency', label:'Currency', type:'text', value:'USD' },
+        { name:'start_date', label:'Start Date', type:'date', required:true },
+        { name:'end_date', label:'End Date', type:'date', required:true },
+        { name:'contract_status', label:'Status', type:'select', options:['active','draft','expired','terminated'], value:'active' },
+        { name:'signed_at', label:'Signed At', type:'date' },
+        { name:'auto_renew', label:'Auto Renew', type:'checkbox' },
+        { name:'terms_text', label:'Terms / Notes', type:'textarea', wide:true },
+      ],
+    },
+  };
+
+  function switchTab(name, el) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    ['audit','users','data','roles','compliance'].forEach(t => {
+      document.getElementById('tab-'+t).style.display = t === name ? 'block' : 'none';
+    });
+    if (name === 'users') loadUsers();
+    if (name === 'data') loadDataEntry();
+    if (name === 'roles') loadRoles();
+  }
+
+  async function loadSystemStats() {
+    try {
+      const s = await AdminAPI.systemStats();
+      document.getElementById('stat-companies').textContent = s.total_companies;
+      document.getElementById('stat-tickets').textContent   = s.total_tickets;
+      document.getElementById('stat-emails').textContent    = s.total_emails;
+      document.getElementById('stat-sessions').textContent  = s.total_sessions;
+      document.getElementById('stat-audit').textContent     = s.total_audit_logs;
+    } catch(e) {}
+  }
+
+  async function loadAuditLogs() {
+    try {
+      const data = await AdminAPI.auditLogs({ limit: 100 });
+      allAuditLogs = data.logs || [];
+      renderAuditTable(allAuditLogs);
+    } catch(e) {}
+  }
+
+  function renderAuditTable(logs) {
+    const statusColors = { success:'badge-green', failure:'badge-red', blocked:'badge-amber' };
+    document.getElementById('audit-tbody').innerHTML = logs.map(l => `
+      <tr>
+        <td class="font-mono text-xs">${formatDate(l.created_at, {hour:'2-digit',minute:'2-digit'})}</td>
+        <td class="text-sm">${l.user_id ? l.user_id.slice(0,8)+'…' : 'System'}</td>
+        <td><code style="font-size:.75rem;background:var(--bg-tertiary);padding:2px 6px;border-radius:4px">${l.action}</code></td>
+        <td class="text-muted text-sm">${l.resource_type||'—'}</td>
+        <td class="font-mono text-xs text-muted">${l.ip_address||'—'}</td>
+        <td><span class="badge ${statusColors[l.status]||'badge-gray'}">${l.status}</span></td>
+      </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-muted)">No audit logs</td></tr>';
+  }
+
+  function filterAuditLogs(q) {
+    const filtered = allAuditLogs.filter(l => l.action?.toLowerCase().includes(q.toLowerCase()));
+    renderAuditTable(filtered);
+  }
+
+  async function loadUsers() {
+    try {
+      const users = await AdminAPI.users();
+      document.getElementById('users-tbody').innerHTML = users.map(u => `
+        <tr>
+          <td style="font-weight:500">${u.full_name}</td>
+          <td class="font-mono text-sm">${u.email}</td>
+          <td><span class="badge ${Auth.getRoleBadgeClass(u.role||'viewer')}">${u.role||'—'}</span></td>
+          <td>${u.is_active ? '<span class="badge badge-green">Active</span>' : '<span class="badge badge-gray">Inactive</span>'}</td>
+          <td class="text-muted">${timeAgo(u.last_login)}</td>
+          <td class="text-muted">${formatDate(u.created_at)}</td>
+          <td>
+            ${u.is_active ? `<button class="btn btn-danger btn-sm" onclick="deactivateUser('${u.id}')">Deactivate</button>` : '—'}
+          </td>
+        </tr>`).join('');
+    } catch(e) {}
+  }
+
+  async function loadRoles() {
+    try {
+      const roles = await AdminAPI.roles();
+      const colorMap = { admin:'badge-red', manager:'badge-amber', analyst:'badge-blue', viewer:'badge-gray' };
+      document.getElementById('roles-grid').innerHTML = roles.map(r => `
+        <div class="card">
+          <div class="flex items-center justify-between mb-3">
+            <span class="card-title">${r.name.charAt(0).toUpperCase()+r.name.slice(1)}</span>
+            <span class="badge ${colorMap[r.name]||'badge-gray'}">${r.name}</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:5px">
+            ${Object.entries(r.permissions||{}).map(([k,v]) => `
+              <div class="flex items-center justify-between text-sm">
+                <span class="text-muted">${k.replace(/_/g,' ')}</span>
+                <span>${v ? '✅' : '❌'}</span>
+              </div>`).join('')}
+          </div>
+        </div>`).join('');
+    } catch(e) {}
+  }
+
+  async function loadDataEntry() {
+    renderRecordTypes();
+    renderDataForm();
+    if (!allCompanies.length) {
+      try {
+        allCompanies = await ClientsAPI.list();
+        renderCompanyOptions();
+      } catch(e) {
+        document.getElementById('data-company').innerHTML = '<option value="">Unable to load companies</option>';
+      }
+    } else {
+      renderCompanyOptions();
+    }
+  }
+
+  function renderRecordTypes() {
+    document.getElementById('record-type-list').innerHTML = Object.entries(recordTypeConfig).map(([key, cfg]) => `
+      <button type="button"
+        class="btn ${key === selectedRecordType ? 'btn-primary' : 'btn-secondary'}"
+        style="justify-content:space-between;width:100%"
+        onclick="selectRecordType('${key}')">
+        <span>${cfg.label}</span>
+        <span class="badge ${key === selectedRecordType ? 'badge-gray' : 'badge-blue'}">${cfg.table}</span>
+      </button>
+    `).join('');
+  }
+
+  function selectRecordType(type) {
+    selectedRecordType = type;
+    sentimentEdited = false;
+    renderRecordTypes();
+    renderDataForm();
+  }
+
+  function renderCompanyOptions() {
+    const current = document.getElementById('data-company').value;
+    document.getElementById('data-company').innerHTML = `
+      <option value="">Select company</option>
+      ${allCompanies.map(c => `<option value="${c.id}" ${c.id === current ? 'selected' : ''}>${c.name}</option>`).join('')}
+    `;
+    loadDataContacts();
+  }
+
+  async function loadDataContacts() {
+    const companyId = document.getElementById('data-company').value;
+    const contactEl = document.getElementById('data-contact');
+    contactEl.innerHTML = '<option value="">Optional</option>';
+    scheduleSentimentPrediction();
+    if (!companyId) return;
+    try {
+      const contacts = await ClientsAPI.contacts(companyId);
+      contactEl.innerHTML = `
+        <option value="">Optional</option>
+        ${contacts.map(c => `<option value="${c.id}">${c.first_name} ${c.last_name} — ${c.email}</option>`).join('')}
+      `;
+    } catch(e) {}
+  }
+
+  function renderDataForm() {
+    const cfg = recordTypeConfig[selectedRecordType];
+    document.getElementById('data-form-title').textContent = `Add ${cfg.label}`;
+    document.getElementById('data-form-subtitle').textContent = cfg.subtitle;
+    document.getElementById('data-target-table').textContent = cfg.table;
+    document.getElementById('data-helper-text').textContent = cfg.helper;
+
+    document.getElementById('dynamic-data-fields').innerHTML = `
+      <div class="admin-data-fields">
+        ${cfg.fields.map(fieldHtml).join('')}
+      </div>
+      ${isSentimentCapable() ? `
+        <div class="flex items-center justify-between mt-4" style="gap:12px;flex-wrap:wrap">
+          <span class="text-sm text-muted" id="sentiment-prediction-status">Sentiment will be predicted from text and past client data.</span>
+          <button class="btn btn-secondary btn-sm" type="button" onclick="predictSentimentNow(true)">Predict Sentiment</button>
+        </div>` : ''}
+    `;
+
+    const now = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    ['sent_at','scheduled_at','called_at','opened_at'].forEach(id => {
+      const el = document.querySelector(`[name="${id}"]`);
+      if (el && !el.value) el.value = now;
+    });
+    attachSentimentPredictionListeners();
+  }
+
+  function fieldHtml(f) {
+    const required = f.required ? 'required' : '';
+    const placeholder = f.placeholder ? `placeholder="${f.placeholder}"` : '';
+    const style = f.wide ? 'grid-column:1 / -1' : '';
+    if (f.type === 'select') {
+      return `
+        <div class="form-group" style="${style}">
+          <label class="form-label">${f.label}</label>
+          <select class="form-input" name="${f.name}" ${required}>
+            ${f.options.map(o => `<option value="${o}" ${o === f.value ? 'selected' : ''}>${o.replace(/_/g,' ')}</option>`).join('')}
+          </select>
+        </div>`;
+    }
+    if (f.type === 'textarea') {
+      return `
+        <div class="form-group" style="${style}">
+          <label class="form-label">${f.label}</label>
+          <textarea class="form-input" name="${f.name}" rows="4" ${placeholder} ${required}></textarea>
+        </div>`;
+    }
+    if (f.type === 'checkbox') {
+      return `
+        <div class="form-group" style="${style}">
+          <label class="form-label">${f.label}</label>
+          <label class="flex items-center gap-2 text-sm text-muted" style="height:40px">
+            <input type="checkbox" name="${f.name}" style="width:16px;height:16px" />
+            Enable
+          </label>
+        </div>`;
+    }
+    return `
+      <div class="form-group" style="${style}">
+        <label class="form-label">${f.label}</label>
+        <input class="form-input" type="${f.type}" name="${f.name}" value="${f.value || ''}" step="${f.step || ''}" ${placeholder} ${required} />
+      </div>`;
+  }
+
+  function isSentimentCapable() {
+    return ['email','meeting','call','ticket'].includes(selectedRecordType);
+  }
+
+  function collectDataFields() {
+    const form = document.getElementById('admin-data-form');
+    const fields = {};
+    recordTypeConfig[selectedRecordType].fields.forEach(f => {
+      const el = form.elements[f.name];
+      if (!el) return;
+      fields[f.name] = f.type === 'checkbox' ? el.checked : el.value;
+    });
+    return fields;
+  }
+
+  function attachSentimentPredictionListeners() {
+    const form = document.getElementById('admin-data-form');
+    if (!form || !isSentimentCapable()) return;
+
+    recordTypeConfig[selectedRecordType].fields.forEach(f => {
+      const el = form.elements[f.name];
+      if (!el) return;
+      if (f.name === 'sentiment_score' || f.name === 'sentiment_label') {
+        el.addEventListener('input', () => { sentimentEdited = true; });
+        el.addEventListener('change', () => { sentimentEdited = true; });
+      } else {
+        el.addEventListener('input', () => scheduleSentimentPrediction());
+        el.addEventListener('change', () => scheduleSentimentPrediction());
+      }
+    });
+  }
+
+  function scheduleSentimentPrediction() {
+    if (!isSentimentCapable() || sentimentEdited) return;
+    clearTimeout(sentimentPredictTimer);
+    sentimentPredictTimer = setTimeout(() => predictSentimentNow(false), 600);
+  }
+
+  async function predictSentimentNow(force) {
+    if (!isSentimentCapable()) return;
+    const form = document.getElementById('admin-data-form');
+    const companyId = form.company_id.value;
+    const statusEl = document.getElementById('sentiment-prediction-status');
+    if (!companyId) {
+      if (statusEl) statusEl.textContent = 'Select a company to predict sentiment.';
+      return;
+    }
+    if (!force && sentimentEdited) return;
+
+    const fields = collectDataFields();
+    if (statusEl) statusEl.textContent = 'Predicting sentiment...';
+
+    try {
+      const prediction = await AdminAPI.predictSentiment({
+        company_id: companyId,
+        record_type: selectedRecordType,
+        fields,
+      });
+      const scoreEl = form.elements.sentiment_score;
+      const labelEl = form.elements.sentiment_label;
+      if (scoreEl && (force || !sentimentEdited)) scoreEl.value = prediction.score;
+      if (labelEl && (force || !sentimentEdited)) labelEl.value = prediction.label;
+      if (force) sentimentEdited = false;
+      if (statusEl) statusEl.textContent = prediction.basis || `Predicted from current text + ${prediction.history_count || 0} past company records`;
+    } catch(e) {
+      if (statusEl) statusEl.textContent = 'Unable to predict sentiment right now.';
+    }
+  }
+
+  async function submitAdminRecord(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const companyId = form.company_id.value;
+    if (!companyId) {
+      Toast.error('Select a company first');
+      return;
+    }
+
+    const submitBtn = document.getElementById('data-submit-btn');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Adding...';
+
+    const fields = collectDataFields();
+
+    try {
+      const res = await AdminAPI.createRecord(selectedRecordType, {
+        company_id: companyId,
+        contact_id: form.contact_id.value || null,
+        fields,
+      });
+      Toast.success(res.message || 'Record added');
+      form.reset();
+      sentimentEdited = false;
+      renderDataForm();
+      renderCompanyOptions();
+      loadSystemStats();
+      loadAuditLogs();
+    } catch(e) {
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Add Record';
+    }
+  }
+
+  async function deactivateUser(id) {
+    if (!confirm('Deactivate this user?')) return;
+    try {
+      await AdminAPI.deactivate(id);
+      Toast.success('User deactivated');
+      loadUsers();
+    } catch(e) {}
+  }
+
+  loadSystemStats();
+  loadAuditLogs();
+</script>
+</body>
+</html>

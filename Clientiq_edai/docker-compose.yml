@@ -1,0 +1,125 @@
+﻿version: "3.9"
+
+# ╔══════════════════════════════════════════════════════════╗
+# ║        ClientIQ — Docker Compose                        ║
+# ║        Enterprise Multi-Agent RAG Platform              ║
+# ╚══════════════════════════════════════════════════════════╝
+#
+# Services:
+#   clientiq-api   — FastAPI backend + frontend serving
+#   tidb           — TiDB (MySQL-compatible) database
+#   tidb-init      — One-shot schema initialiser
+#
+# Usage:
+#   docker-compose up --build
+#   docker-compose up -d              # detached mode
+#   docker-compose logs -f clientiq-api
+
+networks:
+  clientiq-net:
+    driver: bridge
+
+volumes:
+  tidb-data:
+  clientiq-models:
+  clientiq-logs:
+
+services:
+
+  # ── TiDB (MySQL-compatible) ─────────────────────────────────────────────────
+  tidb:
+    image: pingcap/tidb:latest
+    container_name: clientiq-tidb
+    ports:
+      - "4000:4000"     # MySQL protocol
+      - "10080:10080"   # Status API
+    volumes:
+      - tidb-data:/tmp/tidb
+    networks:
+      - clientiq-net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-P", "4000", "-u", "root"]
+      interval: 10s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+
+  # ── TiDB Schema Initialiser ─────────────────────────────────────────────────
+  tidb-init:
+    image: mysql:8.0
+    container_name: clientiq-tidb-init
+    depends_on:
+      tidb:
+        condition: service_healthy
+    networks:
+      - clientiq-net
+    volumes:
+      - ./backend/database/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    environment:
+      MYSQL_HOST:     tidb
+      MYSQL_PORT:     "4000"
+      MYSQL_USER:     root
+      MYSQL_PASSWORD: ""
+    command: >
+      bash -c "
+        echo 'Waiting for TiDB...' &&
+        sleep 5 &&
+        mysql -h tidb -P 4000 -u root < /docker-entrypoint-initdb.d/schema.sql &&
+        echo 'Schema applied ✓'
+      "
+    restart: on-failure
+
+  # ── ClientIQ API + Frontend ─────────────────────────────────────────────────
+  clientiq-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: clientiq-api
+    ports:
+      - "8000:8000"
+    depends_on:
+      tidb:
+        condition: service_healthy
+    networks:
+      - clientiq-net
+    volumes:
+      - clientiq-models:/app/models
+      - clientiq-logs:/app/logs
+    environment:
+      # App
+      APP_ENV:        production
+      APP_SECRET_KEY: ${APP_SECRET_KEY:-change-me-in-production}
+
+      # TiDB
+      TIDB_HOST:     tidb
+      TIDB_PORT:     "4000"
+      TIDB_USER:     root
+      TIDB_PASSWORD: ""
+      TIDB_DATABASE: clientiq
+      TIDB_SSL:      "false"
+
+      # Pinecone (must be set via .env or environment)
+      PINECONE_API_KEY:       ${PINECONE_API_KEY}
+      PINECONE_ENVIRONMENT:   ${PINECONE_ENVIRONMENT:-us-east-1-aws}
+      PINECONE_INDEX_NAME:    ${PINECONE_INDEX_NAME:-clientiq-docs}
+
+      # Mistral AI hosted LLM
+      LLM_PROVIDER:      mistral
+      MISTRAL_API_KEY:   ${MISTRAL_API_KEY}
+      MISTRAL_BASE_URL:  ${MISTRAL_BASE_URL:-https://api.mistral.ai/v1}
+      MISTRAL_MODEL:     ${MISTRAL_MODEL:-mistral-small-latest}
+
+      # Embeddings
+      EMBEDDING_MODEL:    BAAI/bge-small-en-v1.5
+      EMBEDDING_DIMENSION: "384"
+
+      # RAG
+      CHUNK_SIZE:    "512"
+      CHUNK_OVERLAP: "64"
+      TOP_K_RESULTS: "5"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 20s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped

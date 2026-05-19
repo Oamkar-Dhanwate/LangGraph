@@ -1,0 +1,239 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ClientIQ — Clients</title>
+  <link rel="stylesheet" href="static/style.css" />
+  <style>
+    .client-list-panel { background:var(--bg-secondary); border-right:1px solid var(--border); overflow-y:auto; width:300px; flex-shrink:0; }
+    .client-detail { flex:1; overflow-y:auto; padding:24px; }
+    .client-item { padding:14px 16px; border-bottom:1px solid var(--border); cursor:pointer; transition:var(--transition); }
+    .client-item:hover, .client-item.selected { background:var(--bg-hover); }
+    .client-item.selected { border-left:2px solid var(--accent-blue); }
+    .client-name { font-weight:500; font-size:.875rem; margin-bottom:3px; }
+    .tab-bar { display:flex; gap:0; border-bottom:1px solid var(--border); margin-bottom:20px; }
+    .tab { padding:10px 18px; font-size:.875rem; color:var(--text-secondary); cursor:pointer; border-bottom:2px solid transparent; transition:var(--transition); }
+    .tab.active { color:var(--accent-blue); border-bottom-color:var(--accent-blue); }
+    .tab-content { display:none; }
+    .tab-content.active { display:block; }
+    .detail-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:20px; }
+    .detail-field { background:var(--bg-tertiary); border-radius:var(--radius-md); padding:12px; }
+    .detail-label { font-size:.73rem; color:var(--text-muted); font-weight:500; text-transform:uppercase; letter-spacing:.05em; margin-bottom:4px; }
+    .detail-value { font-size:.9rem; font-weight:500; }
+  </style>
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <div class="brand"><div class="brand-icon">IQ</div>Client<span>IQ</span></div>
+    <div style="font-size:.875rem;color:var(--text-secondary);margin-left:8px">/ Clients</div>
+    <div class="topbar-spacer"></div>
+    <div class="topbar-search">
+      <span>🔍</span>
+      <input type="text" placeholder="Search clients…" id="search-input" oninput="filterClients(this.value)" />
+    </div>
+    <div class="topbar-avatar" data-user-initials="AU"></div>
+  </header>
+
+  <nav class="sidebar">
+    <a class="nav-item" href="dashboard.html">📊 Dashboard</a>
+    <a class="nav-item" href="chat.html">🤖 AI Assistant</a>
+    <a class="nav-item active" href="client.html">🏢 Clients</a>
+    <a class="nav-item" href="analytics.html">📈 Analytics</a>
+    <a class="nav-item" href="knowledge_graph.html">🕸 Knowledge Graph</a>
+    <a class="nav-item" href="admin.html">🛡 Admin Panel</a>
+  </nav>
+
+  <main style="display:flex;overflow:hidden;height:calc(100vh - var(--topbar-h))">
+    <!-- Client list -->
+    <div class="client-list-panel">
+      <div style="padding:12px 16px;border-bottom:1px solid var(--border)">
+        <select id="tier-filter" class="form-input" style="font-size:.8rem;padding:6px 10px" onchange="loadClients()">
+          <option value="">All Tiers</option>
+          <option value="platinum">Platinum</option>
+          <option value="gold">Gold</option>
+          <option value="silver">Silver</option>
+          <option value="bronze">Bronze</option>
+        </select>
+      </div>
+      <div id="client-list">
+        <div style="text-align:center;padding:40px"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+    <!-- Client detail -->
+    <div class="client-detail" id="client-detail">
+      <div style="text-align:center;padding:80px 24px;color:var(--text-secondary)">
+        <div style="font-size:48px;margin-bottom:12px">🏢</div>
+        <p style="font-weight:600;color:var(--text-primary)">Select a client</p>
+        <p class="text-sm">Choose a company from the list to view their full intelligence profile</p>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="static/api.js"></script>
+<script src="static/auth.js"></script>
+<script src="static/components.js"></script>
+<script>
+  Auth.requireAuth();
+  Auth.populateUserUI();
+
+  let allClients = [];
+  let selectedId = null;
+
+  async function loadClients() {
+    const tier = document.getElementById('tier-filter').value;
+    try {
+      allClients = await ClientsAPI.list('', tier);
+      renderClientList(allClients);
+    } catch(e) {}
+
+    // Auto-select from URL
+    const id = new URLSearchParams(window.location.search).get('id');
+    if (id) loadClientDetail(id);
+  }
+
+  function renderClientList(clients) {
+    const el = document.getElementById('client-list');
+    if (!clients.length) { el.innerHTML = emptyState('🔍', 'No clients found', 'Try a different filter'); return; }
+    el.innerHTML = clients.map(c => `
+      <div class="client-item ${c.id === selectedId ? 'selected' : ''}" onclick="loadClientDetail('${c.id}')">
+        <div class="client-name">${c.name}</div>
+        <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+          ${tierBadge(c.account_tier)}
+          <span class="text-xs text-muted">${c.industry || '—'}</span>
+        </div>
+        <div style="margin-top:6px">${healthBar(c.health_score)}</div>
+      </div>`).join('');
+  }
+
+  function filterClients(q) {
+    const filtered = allClients.filter(c => c.name.toLowerCase().includes(q.toLowerCase()));
+    renderClientList(filtered);
+  }
+
+  async function loadClientDetail(id) {
+    selectedId = id;
+    document.querySelectorAll('.client-item').forEach(el => el.classList.toggle('selected', el.onclick?.toString().includes(id)));
+    document.getElementById('client-detail').innerHTML = '<div style="text-align:center;padding:60px"><div class="spinner" style="width:32px;height:32px;border-width:3px"></div></div>';
+
+    try {
+      const [company, contacts, contracts, tickets] = await Promise.all([
+        ClientsAPI.get(id),
+        ClientsAPI.contacts(id),
+        ClientsAPI.contracts(id),
+        ClientsAPI.tickets(id),
+      ]);
+      renderDetail(company, contacts, contracts, tickets);
+    } catch(e) { console.error(e); }
+  }
+
+  function renderDetail(c, contacts, contracts, tickets) {
+    const openTickets = tickets.filter(t => ['open','in_progress'].includes(t.status));
+    document.getElementById('client-detail').innerHTML = `
+      <!-- Header -->
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h1 class="page-title" style="margin-bottom:6px">${c.name}</h1>
+          <div class="flex gap-2 items-center">
+            ${tierBadge(c.account_tier)}
+            <span class="badge badge-gray">${c.industry || '—'}</span>
+            <span class="badge badge-gray">${c.size_category || '—'}</span>
+            <span class="badge badge-gray">${c.country || '—'}</span>
+          </div>
+        </div>
+        <div class="flex gap-2">
+          <a href="chat.html?company=${encodeURIComponent(c.name)}" class="btn btn-primary btn-sm">🤖 AI Insight</a>
+        </div>
+      </div>
+
+      <!-- Key metrics row -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">
+        <div class="metric-card blue"><div class="metric-label">Health Score</div><div class="metric-value" style="font-size:1.5rem">${Number(c.health_score).toFixed(0)}</div></div>
+        <div class="metric-card ${Number(c.churn_risk) > 0.6 ? 'red' : 'amber'}"><div class="metric-label">Churn Risk</div><div class="metric-value" style="font-size:1.5rem">${(Number(c.churn_risk)*100).toFixed(0)}%</div></div>
+        <div class="metric-card teal"><div class="metric-label">Annual Revenue</div><div class="metric-value" style="font-size:1.2rem">${formatCurrency(c.annual_revenue)}</div></div>
+        <div class="metric-card ${openTickets.length > 5 ? 'red' : 'green'}"><div class="metric-label">Open Tickets</div><div class="metric-value" style="font-size:1.5rem">${openTickets.length}</div></div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="tab-bar">
+        <div class="tab active" onclick="switchTab('overview',this)">Overview</div>
+        <div class="tab" onclick="switchTab('contacts',this)">Contacts (${contacts.length})</div>
+        <div class="tab" onclick="switchTab('contracts',this)">Contracts (${contracts.length})</div>
+        <div class="tab" onclick="switchTab('tickets',this)">Tickets (${tickets.length})</div>
+      </div>
+
+      <!-- Overview Tab -->
+      <div class="tab-content active" id="tab-overview">
+        <div class="detail-grid">
+          <div class="detail-field"><div class="detail-label">Website</div><div class="detail-value"><a href="${c.website||'#'}" target="_blank">${c.website||'—'}</a></div></div>
+          <div class="detail-field"><div class="detail-label">Account Tier</div><div class="detail-value">${tierBadge(c.account_tier)}</div></div>
+          <div class="detail-field"><div class="detail-label">Size</div><div class="detail-value">${(c.size_category||'—').replace('_',' ')}</div></div>
+          <div class="detail-field"><div class="detail-label">Country</div><div class="detail-value">${c.country||'—'}</div></div>
+          <div class="detail-field"><div class="detail-label">Created</div><div class="detail-value">${formatDate(c.created_at)}</div></div>
+          <div class="detail-field"><div class="detail-label">Last Updated</div><div class="detail-value">${formatDate(c.updated_at)}</div></div>
+        </div>
+      </div>
+
+      <!-- Contacts Tab -->
+      <div class="tab-content" id="tab-contacts">
+        <table class="data-table">
+          <thead><tr><th>Name</th><th>Title</th><th>Department</th><th>Email</th><th>Sentiment</th></tr></thead>
+          <tbody>${contacts.map(ct => `
+            <tr>
+              <td style="font-weight:500">${ct.first_name} ${ct.last_name} ${ct.is_primary ? '<span class="badge badge-blue" style="font-size:.7rem">Primary</span>' : ''}</td>
+              <td>${ct.job_title||'—'}</td>
+              <td>${ct.department||'—'}</td>
+              <td class="font-mono text-sm">${ct.email}</td>
+              <td>${sentimentBadge(null, ct.sentiment_score)}</td>
+            </tr>`).join('')||'<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-muted)">No contacts</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Contracts Tab -->
+      <div class="tab-content" id="tab-contracts">
+        <table class="data-table">
+          <thead><tr><th>Title</th><th>Type</th><th>Value</th><th>Status</th><th>End Date</th></tr></thead>
+          <tbody>${contracts.map(ct => `
+            <tr>
+              <td style="font-weight:500">${ct.title}</td>
+              <td>${ct.contract_type?.replace('_',' ')}</td>
+              <td style="font-weight:600">${formatCurrency(ct.value)}</td>
+              <td>${statusBadge(ct.status)}</td>
+              <td>${formatDate(ct.end_date)}</td>
+            </tr>`).join('')||'<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-muted)">No contracts</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Tickets Tab -->
+      <div class="tab-content" id="tab-tickets">
+        <table class="data-table">
+          <thead><tr><th>#</th><th>Title</th><th>Priority</th><th>Status</th><th>Opened</th></tr></thead>
+          <tbody>${tickets.slice(0,20).map(t => `
+            <tr>
+              <td class="font-mono text-xs text-muted">${t.ticket_number}</td>
+              <td style="font-weight:500">${t.title}</td>
+              <td>${priorityBadge(t.priority)}</td>
+              <td>${statusBadge(t.status)}</td>
+              <td class="text-muted">${timeAgo(t.opened_at)}</td>
+            </tr>`).join('')||'<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-muted)">No tickets</td></tr>'}
+          </tbody>
+        </table>
+      </div>`;
+  }
+
+  function switchTab(name, el) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('tab-' + name)?.classList.add('active');
+  }
+
+  loadClients();
+</script>
+</body>
+</html>
