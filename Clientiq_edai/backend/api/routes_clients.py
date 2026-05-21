@@ -16,6 +16,7 @@ from backend.database.connection import get_db
 from backend.database.models import Company, Contact, Meeting, Contract, SupportTicket, Email, CallTranscript
 from backend.api.routes_auth import get_current_user
 from backend.services.audit_service import audit_service
+from backend.services.graph_service import graph_service
 
 router = APIRouter()
 
@@ -107,6 +108,8 @@ async def create_client(
         ),
     )
     db.add(company)
+    await db.flush()
+    await graph_service.upsert_company(db, company)
     await db.commit()
     await db.refresh(company)
 

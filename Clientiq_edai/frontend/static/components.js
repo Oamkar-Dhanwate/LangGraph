@@ -1,4 +1,4 @@
-﻿// Shared UI components
+// Shared UI components
 /**
  * ClientIQ — Shared UI Components
  * Reusable DOM-building helpers for tables, badges, risk indicators, citations.
@@ -78,7 +78,7 @@ function statusBadge(status) {
     terminated:   'badge-red',
     pending_customer: 'badge-blue',
   };
-  return `<span class="badge ${map[status?.toLowerCase()] || 'badge-gray'}">${(status || '—').replace('_', ' ')}</span>`;
+  return `<span class="badge ${map[status?.toLowerCase()] || 'badge-gray'}">${(status || '—').replaceAll('_', ' ')}</span>`;
 }
 
 // ── Priority Badge ────────────────────────────────────────────────────────────

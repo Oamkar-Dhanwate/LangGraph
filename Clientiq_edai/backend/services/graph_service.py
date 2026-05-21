@@ -7,9 +7,9 @@ Exports Cytoscape.js-compatible JSON for frontend visualization.
 
 from typing import Dict, List, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import desc, select
 
-from backend.database.models import KGEntity, KGRelationship
+from backend.database.models import Company, KGEntity, KGRelationship
 from backend.utils.logger import logger
 
 try:
@@ -31,8 +31,8 @@ class GraphService:
         """
         Fetch graph data from TiDB and return in Cytoscape.js format.
         """
-        entity_q = select(KGEntity).limit(limit)
-        rel_q = select(KGRelationship).limit(limit)
+        entity_q = select(KGEntity).order_by(desc(KGEntity.created_at)).limit(limit)
+        rel_q = select(KGRelationship).order_by(desc(KGRelationship.created_at)).limit(limit)
 
         entities_res = await db.execute(entity_q)
         rels_res = await db.execute(rel_q)
@@ -92,7 +92,30 @@ class GraphService:
             )
             db.add(entity)
             await db.flush()
+        else:
+            if source_id and not entity.source_id:
+                entity.source_id = source_id
+            if properties:
+                entity.properties = {**(entity.properties or {}), **properties}
         return entity
+
+    async def upsert_company(self, db: AsyncSession, company: Company) -> KGEntity:
+        properties = {
+            "company_id": company.id,
+            "industry": company.industry,
+            "size_category": company.size_category,
+            "country": company.country,
+            "account_tier": company.account_tier,
+            "health_score": float(company.health_score) if company.health_score is not None else None,
+            "churn_risk": float(company.churn_risk) if company.churn_risk is not None else None,
+        }
+        return await self.upsert_entity(
+            db,
+            entity_type="company",
+            name=company.name,
+            properties=properties,
+            source_id=company.id,
+        )
 
     async def upsert_relationship(
         self, db: AsyncSession,

@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -84,9 +84,58 @@
     <!-- Add CRM Data Tab -->
     <div id="tab-data" style="display:none">
       <div class="admin-data-layout">
-        <div class="card">
-          <div class="card-title" style="margin-bottom:12px">Record Type</div>
-          <div style="display:flex;flex-direction:column;gap:8px" id="record-type-list"></div>
+        <div style="display:flex;flex-direction:column;gap:20px">
+          <div class="card">
+            <div class="card-title" style="margin-bottom:12px">Record Type</div>
+            <div style="display:flex;flex-direction:column;gap:8px" id="record-type-list"></div>
+          </div>
+
+          <div class="card">
+            <div class="card-title" style="margin-bottom:12px">Add New Company</div>
+            <form id="add-company-form" onsubmit="submitNewCompany(event)">
+              <div class="form-group">
+                <label class="form-label" for="new-company-name">Company Name</label>
+                <input type="text" class="form-input" id="new-company-name" name="name" placeholder="e.g. Acme Corp" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="new-company-industry">Industry</label>
+                <input type="text" class="form-input" id="new-company-industry" name="industry" placeholder="e.g. Technology" />
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <div class="form-group">
+                  <label class="form-label" for="new-company-tier">Account Tier</label>
+                  <select class="form-input" id="new-company-tier" name="account_tier">
+                    <option value="bronze">Bronze</option>
+                    <option value="silver" selected>Silver</option>
+                    <option value="gold">Gold</option>
+                    <option value="platinum">Platinum</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="new-company-size">Size Category</label>
+                  <select class="form-input" id="new-company-size" name="size_category">
+                    <option value="startup">Startup</option>
+                    <option value="smb" selected>SMB</option>
+                    <option value="mid_market">Mid-Market</option>
+                    <option value="enterprise">Enterprise</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="new-company-revenue">Annual Revenue ($)</label>
+                <input type="number" class="form-input" id="new-company-revenue" name="annual_revenue" placeholder="e.g. 5000000" />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="new-company-website">Website</label>
+                <input type="text" class="form-input" id="new-company-website" name="website" placeholder="e.g. acme.com" />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="new-company-country">Country</label>
+                <input type="text" class="form-input" id="new-company-country" name="country" value="United States" />
+              </div>
+              <button class="btn btn-primary w-full" id="new-company-submit-btn" type="submit">Create Company</button>
+            </form>
+          </div>
         </div>
 
         <div class="card">
@@ -310,7 +359,7 @@
     const statusColors = { success:'badge-green', failure:'badge-red', blocked:'badge-amber' };
     document.getElementById('audit-tbody').innerHTML = logs.map(l => `
       <tr>
-        <td class="font-mono text-xs">${formatDate(l.created_at, {hour:'2-digit',minute:'2-digit',timeZone:'Asia/Kolkata'})}</td>
+        <td class="font-mono text-xs">${formatDate(l.created_at, {hour:'2-digit',minute:'2-digit'})}</td>
         <td class="text-sm">${l.user_id ? l.user_id.slice(0,8)+'…' : 'System'}</td>
         <td><code style="font-size:.75rem;background:var(--bg-tertiary);padding:2px 6px;border-radius:4px">${l.action}</code></td>
         <td class="text-muted text-sm">${l.resource_type||'—'}</td>
@@ -410,8 +459,10 @@
     const companyId = document.getElementById('data-company').value;
     const contactEl = document.getElementById('data-contact');
     contactEl.innerHTML = '<option value="">Optional</option>';
-    scheduleSentimentPrediction();
-    if (!companyId) return;
+    if (!companyId) {
+      scheduleSentimentPrediction();
+      return;
+    }
     try {
       const contacts = await ClientsAPI.contacts(companyId);
       contactEl.innerHTML = `
@@ -419,6 +470,7 @@
         ${contacts.map(c => `<option value="${c.id}">${c.first_name} ${c.last_name} — ${c.email}</option>`).join('')}
       `;
     } catch(e) {}
+    scheduleSentimentPrediction();
   }
 
   function renderDataForm() {
@@ -581,10 +633,70 @@
       renderCompanyOptions();
       loadSystemStats();
       loadAuditLogs();
-    } catch(e) {
+    } catch(err) {
+      if (!err.isHandled) {
+        Toast.error(err.message || 'Failed to add record due to a network error');
+      }
     } finally {
       submitBtn.disabled = false;
       submitBtn.textContent = 'Add Record';
+    }
+  }
+
+  async function submitNewCompany(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const submitBtn = document.getElementById('new-company-submit-btn');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Creating...';
+
+    let website = form.website.value.trim();
+    if (website && !/^https?:\/\//i.test(website)) {
+      website = 'https://' + website;
+    }
+
+    const payload = {
+      name: form.name.value.trim(),
+      industry: form.industry.value.trim() || null,
+      account_tier: form.account_tier.value,
+      size_category: form.size_category.value,
+      annual_revenue: form.annual_revenue.value ? parseFloat(form.annual_revenue.value) : null,
+      website: website || null,
+      country: form.country.value.trim() || 'United States'
+    };
+
+    try {
+      const res = await ClientsAPI.create(payload);
+      Toast.success(res.message || 'Company created');
+      form.reset();
+      
+      // Reload companies list in dropdowns
+      allCompanies = await ClientsAPI.list();
+      
+      // Update DOM with new companies list
+      renderCompanyOptions();
+      
+      // Select the newly created company in the select dropdown
+      const selectEl = document.getElementById('data-company');
+      selectEl.value = res.company.id;
+      
+      // Load contacts for newly selected company
+      loadDataContacts();
+
+      // Apply green glow highlight animation on success
+      selectEl.classList.remove('glow-highlight');
+      void selectEl.offsetWidth; // force reflow to restart animation
+      selectEl.classList.add('glow-highlight');
+      
+      loadSystemStats();
+      loadAuditLogs();
+    } catch(err) {
+      if (!err.isHandled) {
+        Toast.error(err.message || 'Failed to create company due to a network error');
+      }
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Create Company';
     }
   }
 
@@ -594,7 +706,11 @@
       await AdminAPI.deactivate(id);
       Toast.success('User deactivated');
       loadUsers();
-    } catch(e) {}
+    } catch(err) {
+      if (!err.isHandled) {
+        Toast.error(err.message || 'Failed to deactivate user due to a network error');
+      }
+    }
   }
 
   loadSystemStats();

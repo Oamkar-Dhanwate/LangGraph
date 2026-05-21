@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -208,9 +208,11 @@
   }
 
   document.getElementById('rev-months').addEventListener('change', async () => {
-    const months = parseInt(document.getElementById('rev-months').value);
-    const rv = await AnalyticsAPI.revenueTrend(months);
-    buildRevenueChart('revenueChart', rv.map(r => r.month), rv.map(r => r.revenue));
+    try {
+      const months = parseInt(document.getElementById('rev-months').value);
+      const rv = await AnalyticsAPI.revenueTrend(months);
+      buildRevenueChart('revenueChart', rv.map(r => r.month), rv.map(r => r.revenue));
+    } catch(e) { console.warn('Revenue chart refresh failed', e); }
   });
 
   loadDashboard();

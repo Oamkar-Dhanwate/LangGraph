@@ -1,4 +1,4 @@
-﻿# Admin routes
+# Admin routes
 """
 ClientIQ — Admin Routes
 Audit logs, user management, and system health for admin panel.
@@ -10,6 +10,7 @@ from decimal import Decimal, InvalidOperation
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc, func
+from sqlalchemy.orm import selectinload
 from pydantic import BaseModel
 from typing import Any, Dict, Optional
 
@@ -31,6 +32,7 @@ from backend.database.models import (
 from backend.api.routes_auth import get_current_user
 from backend.ml.sentiment_model import sentiment_model
 from backend.services.audit_service import audit_service
+from backend.services.graph_service import graph_service
 from backend.services.indexing_service import indexing_service
 from backend.utils.logger import logger
 
@@ -44,7 +46,7 @@ class AdminRecordCreate(BaseModel):
 
 
 class SentimentPredictionRequest(BaseModel):
-    company_id: str
+    company_id: Optional[str] = None
     record_type: str
     fields: Dict[str, Any] = {}
 
@@ -158,11 +160,12 @@ def sentiment_text(record_type: str, fields: Dict[str, Any]) -> str:
 
 async def predict_sentiment_for_record(
     db: AsyncSession,
-    company_id: str,
+    company_id: Optional[str],
     record_type: str,
     fields: Dict[str, Any],
 ) -> Dict[str, Any]:
-    await validate_company_and_contact(db, company_id, None)
+    if company_id:
+        await validate_company_and_contact(db, company_id, None)
 
     source_type = sentiment_source_type(record_type)
     if not source_type:
@@ -173,20 +176,19 @@ async def predict_sentiment_for_record(
     if text:
         text_score, _ = sentiment_model.score(text)
 
-    history_query = (
-        select(SentimentTimeline)
-        .where(SentimentTimeline.company_id == company_id)
-        .order_by(desc(SentimentTimeline.recorded_at))
-        .limit(20)
-    )
-    if source_type:
+    history_rows = []
+    if company_id and source_type:
+        history_query = (
+            select(SentimentTimeline)
+            .where(SentimentTimeline.company_id == company_id)
+            .order_by(desc(SentimentTimeline.recorded_at))
+            .limit(20)
+        )
         same_type_query = history_query.where(SentimentTimeline.source_type == source_type)
         same_type_result = await db.execute(same_type_query)
         history_rows = same_type_result.scalars().all()
-    else:
-        history_rows = []
 
-    if not history_rows:
+    if company_id and not history_rows:
         history_result = await db.execute(history_query)
         history_rows = history_result.scalars().all()
 
@@ -245,13 +247,16 @@ async def list_users(
     db: AsyncSession = Depends(get_db),
 ):
     """List all system users (admin only)."""
-    result = await db.execute(select(User).order_by(desc(User.created_at)))
+    result = await db.execute(
+        select(User).options(selectinload(User.role)).order_by(desc(User.created_at))
+    )
     users = result.scalars().all()
     return [
         {
             "id": u.id,
             "email": u.email,
             "full_name": u.full_name,
+            "role": u.role.name if u.role else None,
             "is_active": u.is_active,
             "last_login": u.last_login.isoformat() if u.last_login else None,
             "created_at": u.created_at.isoformat() if u.created_at else None,
@@ -316,7 +321,8 @@ async def create_crm_record(
     if record_type not in allowed_types:
         raise HTTPException(status_code=400, detail=f"record_type must be one of: {', '.join(sorted(allowed_types))}")
 
-    await validate_company_and_contact(db, body.company_id, body.contact_id)
+    company, _ = await validate_company_and_contact(db, body.company_id, body.contact_id)
+    await graph_service.upsert_company(db, company)
     fields = body.fields or {}
     predicted_sentiment = None
     if sentiment_source_type(record_type) and (

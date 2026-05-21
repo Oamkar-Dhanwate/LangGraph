@@ -1,4 +1,4 @@
-﻿// Fetch wrappers
+// Fetch wrappers
 /**
  * ClientIQ — API Client
  * Centralized fetch wrappers for all backend REST endpoints.
@@ -33,19 +33,22 @@ async function apiFetch(path, options = {}) {
     if (!res.ok) {
       const msg = data?.detail || `Error ${res.status}`;
       Toast.error(msg);
-      throw new Error(msg);
+      const error = new Error(msg);
+      error.isHandled = true;
+      throw error;
     }
 
     return data;
   } catch (err) {
-    if (err.name !== 'Error' || !err.message.startsWith('Error ')) {
+    // Only suppress logging for HTTP errors we already toasted
+    if (!err.isHandled) {
       console.error('[API]', path, err.message);
     }
     throw err;
   }
 }
 
-const get  = (path, params) => {
+const get = (path, params) => {
   const url = params ? `${path}?${new URLSearchParams(params)}` : path;
   return apiFetch(url, { method: 'GET' });
 };
@@ -56,8 +59,8 @@ const patch = (path, body) => apiFetch(path, { method: 'PATCH', body: JSON.strin
 
 const AuthAPI = {
   login: (email, password) => post('/auth/login', { email, password }),
-  me:    ()                 => get('/auth/me'),
-  logout: ()                => post('/auth/logout', {}),
+  me: () => get('/auth/me'),
+  logout: () => post('/auth/logout', {}),
 };
 
 // ── AI Query ──────────────────────────────────────────────────────────────────
@@ -71,44 +74,45 @@ const QueryAPI = {
 // ── Analytics ─────────────────────────────────────────────────────────────────
 
 const AnalyticsAPI = {
-  overview:     ()            => get('/analytics/overview'),
-  churnRisk:    (minRisk)     => get('/analytics/churn-risk', minRisk ? { min_risk: minRisk } : {}),
-  revenueTrend: (months)      => get('/analytics/revenue-trend', { months: months || 6 }),
+  overview: () => get('/analytics/overview'),
+  churnRisk: (minRisk) => get('/analytics/churn-risk', minRisk ? { min_risk: minRisk } : {}),
+  revenueTrend: (months) => get('/analytics/revenue-trend', { months: months || 6 }),
   sentimentTimeline: (companyId, days) =>
     get('/analytics/sentiment-timeline', { ...(companyId ? { company_id: companyId } : {}), days: days || 90 }),
-  healthDistribution: ()      => get('/analytics/health-distribution'),
+  healthDistribution: () => get('/analytics/health-distribution'),
 };
 
 // ── Clients ───────────────────────────────────────────────────────────────────
 
 const ClientsAPI = {
-  list:      (search, tier)  => get('/clients/', { ...(search ? { search } : {}), ...(tier ? { tier } : {}) }),
-  get:       (id)            => get(`/clients/${id}`),
-  contacts:  (id)            => get(`/clients/${id}/contacts`),
-  meetings:  (id)            => get(`/clients/${id}/meetings`),
-  contracts: (id)            => get(`/clients/${id}/contracts`),
-  tickets:   (id, status)    => get(`/clients/${id}/tickets`, status ? { status } : {}),
-  emails:    (id)            => get(`/clients/${id}/emails`),
-  calls:     (id)            => get(`/clients/${id}/calls`),
+  list: (search, tier) => get('/clients/', { ...(search ? { search } : {}), ...(tier ? { tier } : {}) }),
+  create: (body) => post('/clients/', body),
+  get: (id) => get(`/clients/${id}`),
+  contacts: (id) => get(`/clients/${id}/contacts`),
+  meetings: (id) => get(`/clients/${id}/meetings`),
+  contracts: (id) => get(`/clients/${id}/contracts`),
+  tickets: (id, status) => get(`/clients/${id}/tickets`, status ? { status } : {}),
+  emails: (id) => get(`/clients/${id}/emails`),
+  calls: (id) => get(`/clients/${id}/calls`),
 };
 
 // ── Knowledge Graph ───────────────────────────────────────────────────────────
 
 const GraphAPI = {
-  data:       (companyId)    => get('/graph/', companyId ? { company_id: companyId } : {}),
-  centrality: ()             => get('/graph/centrality'),
+  data: (companyId) => get('/graph/', companyId ? { company_id: companyId } : {}),
+  centrality: () => get('/graph/centrality'),
 };
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
 
 const AdminAPI = {
-  auditLogs:   (params)      => get('/admin/audit-logs', params || {}),
-  users:       ()            => get('/admin/users'),
-  roles:       ()            => get('/admin/roles'),
-  systemStats: ()            => get('/admin/system-stats'),
-  predictSentiment: (body)   => post('/admin/sentiment-prediction', body),
-  createRecord:(type, body)  => post(`/admin/records/${type}`, body),
-  deactivate:  (userId)      => patch(`/admin/users/${userId}/deactivate`),
+  auditLogs: (params) => get('/admin/audit-logs', params || {}),
+  users: () => get('/admin/users'),
+  roles: () => get('/admin/roles'),
+  systemStats: () => get('/admin/system-stats'),
+  predictSentiment: (body) => post('/admin/sentiment-prediction', body),
+  createRecord: (type, body) => post(`/admin/records/${type}`, body),
+  deactivate: (userId) => patch(`/admin/users/${userId}/deactivate`),
 };
 
 // ── Health ────────────────────────────────────────────────────────────────────
