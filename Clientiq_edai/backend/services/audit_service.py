@@ -5,12 +5,23 @@ Records all user actions for compliance and governance tracking.
 """
 
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from typing import Optional, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
 
 from backend.database.models import AuditLog
 from backend.utils.logger import logger
+
+
+IST = ZoneInfo("Asia/Kolkata")
+
+
+def to_ist_iso(value: datetime) -> str:
+    """Convert stored UTC timestamps to explicit IST ISO strings."""
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(IST).isoformat()
 
 
 class AuditService:
@@ -57,7 +68,13 @@ class AuditService:
             q = q.where(AuditLog.action == action)
         q = q.limit(limit).offset(offset)
         result = await db.execute(q)
-        return [r.to_dict() for r in result.scalars().all()]
+        logs = []
+        for row in result.scalars().all():
+            item = row.to_dict()
+            if row.created_at:
+                item["created_at"] = to_ist_iso(row.created_at)
+            logs.append(item)
+        return logs
 
 
 audit_service = AuditService()

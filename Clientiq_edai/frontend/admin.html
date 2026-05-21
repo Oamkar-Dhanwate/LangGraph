@@ -310,7 +310,7 @@
     const statusColors = { success:'badge-green', failure:'badge-red', blocked:'badge-amber' };
     document.getElementById('audit-tbody').innerHTML = logs.map(l => `
       <tr>
-        <td class="font-mono text-xs">${formatDate(l.created_at, {hour:'2-digit',minute:'2-digit'})}</td>
+        <td class="font-mono text-xs">${formatDate(l.created_at, {hour:'2-digit',minute:'2-digit',timeZone:'Asia/Kolkata'})}</td>
         <td class="text-sm">${l.user_id ? l.user_id.slice(0,8)+'…' : 'System'}</td>
         <td><code style="font-size:.75rem;background:var(--bg-tertiary);padding:2px 6px;border-radius:4px">${l.action}</code></td>
         <td class="text-muted text-sm">${l.resource_type||'—'}</td>
