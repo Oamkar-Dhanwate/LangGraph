@@ -31,6 +31,7 @@ from backend.database.models import (
 from backend.api.routes_auth import get_current_user
 from backend.ml.sentiment_model import sentiment_model
 from backend.services.audit_service import audit_service
+from backend.services.indexing_service import indexing_service
 from backend.utils.logger import logger
 
 router = APIRouter()
@@ -491,6 +492,13 @@ async def create_crm_record(
         resource_id=record.id,
         details={"company_id": body.company_id, "contact_id": body.contact_id},
     )
+
+    # ── Auto-index into Pinecone immediately after TiDB commit ──────────────
+    # Runs in a background thread so it never delays the HTTP response.
+    # Supported: email, meeting, call, ticket, contract.
+    # opportunity_note is silently skipped (no free-text body to embed).
+    await indexing_service.index_record(record, source_type or "")
+
     return {"message": f"{record_type.replace('_', ' ')} created", "record": record.to_dict()}
 
 
